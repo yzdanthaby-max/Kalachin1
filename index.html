@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="fa" dir="rtl"><head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>کالانو | خرید هوشمند، تحویل سریع</title>
@@ -825,7 +826,7 @@ const SRC_HTML=(()=>{try{const c=document.documentElement.cloneNode(true);c.quer
    ===================================================================== */
 
 /* ============================== CONFIG ============================== */
-const CONFIG={
+const CONFIG={supabase:{url:'https://chyhxnkdewkslwrrpboq.supabase.co',key:'sb_publishable_qi3iOgtJHzzRlPIw35Av6A_6uj4vZJ4'},
  version:2,
  keys:{db:'kalano_db',cart:'kalano_cart',favs:'kalano_favs',theme:'kalano_theme',session:'kalano_session',admin:'kalano_admin',hist:'kalano_hist',guest:'kalano_guest',cpn:'kalano_cpn',draft:'kalano_draft',prefs:'kalano_prefs',recent:'kalano_recent',cmp:'kalano_cmp'},
  pageSize:12,
@@ -836,6 +837,7 @@ const CONFIG={
  provinces:['تهران','البرز','اصفهان','فارس','خراسان رضوی','آذربایجان شرقی','آذربایجان غربی','مازندران','گیلان','خوزستان','کرمان','قم','یزد','همدان','کرمانشاه','قزوین','سمنان','زنجان','مرکزی','لرستان','اردبیل','گلستان','هرمزگان','بوشهر','سیستان و بلوچستان','کردستان','چهارمحال و بختیاری','کهگیلویه و بویراحمد','ایلام','خراسان شمالی','خراسان جنوبی'],
  statuses:{pending:['در انتظار پرداخت','wr'],paid:['پرداخت‌شده','in'],processing:['در حال پردازش','in'],shipped:['ارسال‌شده','p'],completed:['تکمیل‌شده','ok'],canceled:['لغوشده','er']}
 };
+const SB=window.supabase.createClient(CONFIG.supabase.url,CONFIG.supabase.key);
 
 /* ============================== UTILITIES ============================== */
 const $=(s,r=document)=>r.querySelector(s);
@@ -1672,7 +1674,7 @@ S.ui.slide=0;S.ui.heroTick=0;setInterval(()=>{const c=$('#car');if(!c){S.ui.hero
 async function boot(){loadState();applyTheme();
  if(!location.hash.startsWith('#/')&&location.hash){const id=location.hash.slice(1);history.replaceState(null,'','#/');setTimeout(()=>document.getElementById(id)?.scrollIntoView(),100)}
  const app=$('#app');app.innerHTML=header()+`<main id="main"><div class="wrap content"><div class="skel" style="height:340px;border-radius:24px;margin-top:20px"></div><div style="margin-top:30px">${skelGrid(8)}</div></div></main>`;
- await IMGDB.loadAll();
+ await IMGDB.loadAll(); await loadProductsFromSupabase();
  /* پاک‌سازی تصاویر بی‌استفاده */
  const used=new Set([...S.db.products.flatMap(p=>p.images),S.db.settings.logo].filter(r=>r&&r.startsWith('idb:')).map(r=>r.slice(4)));[...IMGDB.cache.keys()].forEach(k=>{if(!used.has(k))IMGDB.del(k)});
  LAST=parseRoute().name;render();
@@ -2242,7 +2244,59 @@ const INV={
   if(!prev){const o=ids.filter(x=>x.endsWith(':out')).length,l=ids.length-o;if(ids.length)db.alerts.unshift({id:uid('al'),kind:'info',pid:'',t:`بررسی اولیه انبار: ${fa(l)} کالا کم‌موجود و ${fa(o)} کالا ناموجود است.`,at:now,read:false})}
   db.meta.invLow=ids;if(db.alerts.length>200)db.alerts.length=200}};
 let _invT=0;
-function persist(){try{if(S.db&&S.db.settings&&S.db.settings.invAlerts!==false)INV.scan()}catch(e){console.error(e)}return persistBase()}
+async function loadProductsFromSupabase(){
+  try{
+    if(typeof SB==='undefined')return;
+
+    const {data,error}=await SB.from('Products').select('*').order('created_at',{ascending:true});
+
+    if(error){
+      console.error('SUPABASE_PRODUCTS_LOAD_ERROR',error);
+      return;
+    }
+
+    if(Array.isArray(data)&&data.length){
+      const products=data.map(x=>x&&x.data).filter(x=>x&&x.id);
+
+      if(products.length){
+        S.db.products=products;
+        persistBase();
+        render();
+        console.log('SUPABASE_PRODUCTS_LOAD_OK',products.length);
+      }
+    }
+  }catch(e){
+    console.error('SUPABASE_PRODUCTS_LOAD_EXCEPTION',e);
+  }
+}
+
+async function syncProductsToSupabase(){
+  try{
+    if(typeof SB==='undefined')return;
+    if(!S.db||!Array.isArray(S.db.products))return;
+
+    const rows=S.db.products.map(p=>({
+      id:p.id,
+      data:p,
+      created_at:p.created||Date.now()
+    }));
+
+    if(!rows.length)return;
+
+    const {error}=await SB.from('Products').upsert(rows,{onConflict:'id'});
+
+    if(error){
+      console.error('SUPABASE_PRODUCTS_SYNC_ERROR',error);
+      return;
+    }
+
+    console.log('SUPABASE_PRODUCTS_SYNC_OK',rows.length);
+  }catch(e){
+    console.error('SUPABASE_PRODUCTS_SYNC_EXCEPTION',e);
+  }
+}
+
+function persist(){try{if(S.db&&S.db.settings&&S.db.settings.invAlerts!==false)INV.scan()}catch(e){console.error(e)}const ok=persistBase();if(ok)syncProductsToSupabase();return ok}
 
 /* ============================== V5: THEMES ============================== */
 THEMES.push({id:'warmlux',name:'لاکچری گرم',c:['#F7F4EF','#ffffff','#A58B70','#1C1C1C'],d:0},{id:'rosegarden',name:'رز',c:['#F8E8E8','#FFF9F7','#8B3A4A','#3a1d24'],d:0},{id:'modernblue',name:'آبی مدرن',c:['#EAF2FF','#ffffff','#3157D5','#111827'],d:0},{id:'naturalgreen',name:'سبز طبیعی',c:['#F6F5EF','#ffffff','#315C45','#B59B7A'],d:0},{id:'burgundy',name:'شرابی تیره',c:['#171717','#222020','#9E2F3F','#F4F1EA'],d:1});
