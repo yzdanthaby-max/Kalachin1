@@ -1642,7 +1642,47 @@ const FORMS={
  price:f=>{const p=PRODUCTS.get(f.dataset.id);const pr=num(f.elements.price.value),old=f.elements.old.value?num(f.elements.old.value):0;const e={};if(!(pr>0))e.price='قیمت معتبر وارد کنید.';if(old&&!(old>pr))e.old='قیمت قبلی باید بیشتر از قیمت جدید باشد.';if(formErr(f,e))return;const before=p.price;if(Math.round(pr)!==before)logPrice(p,Math.round(pr));p.price=Math.round(pr);p.old=Math.round(old||0);p.updated=Date.now();persist();closeLayer();renderMain();toast('قیمت از '+money(before)+' به '+money(p.price)+' تومان تغییر کرد','ok');if(p.price<before&&PRODUCTS.off(p)>=10)NOTIF.push({type:'price',title:'کاهش قیمت: '+p.name.slice(0,40),body:'قیمت جدید '+money(p.price)+' تومان (٪'+fa(PRODUCTS.off(p))+' تخفیف)',link:'#/p/'+p.id})},
  product:()=>saveProduct(),cpnf:()=>saveCoupon(),
  areply:f=>{const t=f.elements.t.value.trim();if(!t)return;const k=f.dataset.k;const c=S.db.chats[k];c.msgs.push({from:'admin',text:t.slice(0,1000),at:Date.now()});c.updated=Date.now();S.db.notifs.unshift({id:uid('n'),type:'admin',title:'پاسخ پشتیبانی',body:t.slice(0,140),link:'',to:k,at:Date.now()});persist();renderMain();setTimeout(()=>{const a=$('#achat');if(a)a.scrollTop=a.scrollHeight;$('[data-form=areply] input')?.focus()},20);toast('پاسخ ارسال شد','ok')},
- bcast:f=>{const d=Object.fromEntries(new FormData(f));const e={};if(String(d.title).trim().length<3)e.title='عنوان را وارد کنید.';if(String(d.body).trim().length<5)e.body='متن را وارد کنید.';if(formErr(f,e))return;NOTIF.push({type:d.type,title:d.title.trim(),body:d.body.trim(),link:/^#\//.test(d.link)?d.link:'',to:d.to||null});S.db.sent.push({at:Date.now(),title:d.title});persist();renderMain();toast('اعلان ارسال شد','ok')},
+ bcast:async f=>{
+  const d=Object.fromEntries(new FormData(f));
+  const e={};
+  if(String(d.title||'').trim().length<3)e.title='عنوان را وارد کنید.';
+  if(String(d.body||'').trim().length<5)e.body='متن را وارد کنید.';
+  if(formErr(f,e))return;
+  const global=!d.to;
+  const item={
+    type:d.type||'admin',
+    title:String(d.title).trim(),
+    body:String(d.body).trim(),
+    link:/^#\//.test(d.link||'')?d.link:'',
+    to:d.to||null
+  };
+  if(global){
+    try{
+      const {data:ad,error:ae}=await SB.auth.getUser();
+      if(ae)throw ae;
+      if(!ad.user||ad.user.id!=='12f2c2b7-e34b-4618-b4fd-81ee7c526988')
+        throw new Error('برای ارسال اعلان عمومی باید با حساب مدیر مجاز وارد شده باشید.');
+      const {data:row,error}=await SB.from('Notifications').insert({
+        title:item.title,
+        body:item.body,
+        type:item.type,
+        link:item.link,
+        target_user:null
+      }).select('id,title,body,type,link,created_at').single();
+      if(error)throw error;
+      upsertAnnouncementRow(row);
+    }catch(err){
+      console.error('SUPABASE_ANNOUNCEMENT_INSERT_ERROR',err);
+      return toast(err.message||'ذخیره اعلان عمومی ناموفق بود.','er');
+    }
+  }else{
+    NOTIF.push(item);
+  }
+  S.db.sent.push({at:Date.now(),title:item.title});
+  persist();
+  renderMain();
+  toast(global?'اعلان عمومی در دیتابیس ذخیره شد':'پیام خصوصی فقط در این مرورگر ذخیره شد؛ همگام‌سازی خصوصی فعال نیست.','ok');
+},
  umsg:f=>{const t=f.elements.title.value.trim(),b=f.elements.body.value.trim();if(t.length<3||b.length<3)return toast('عنوان و متن را وارد کنید','er');NOTIF.push({type:'admin',title:t,body:b,to:f.dataset.id});closeLayer();toast('پیام برای کاربر ارسال شد','ok')},
  settings:async f=>{const d=Object.fromEntries(new FormData(f));const st=S.db.settings;const e={};if(String(d.name).trim().length<2)e.name='نام فروشگاه را وارد کنید.';if(d.email&&!VALID.email(d.email.trim()))e.email='ایمیل معتبر نیست.';['instagram','telegram','whatsapp','linkedin'].forEach(k=>{const v=String(d['so_'+k]||'').trim();if(v&&!/^https:\/\//.test(v))e['so_'+k]='آدرس باید با https:// شروع شود.'});if(d.apass&&!VALID.pass(d.apass))e.apass='حداقل ۸ کاراکتر با حرف و عدد.';if(formErr(f,e))return toast('خطاهای فرم را برطرف کنید','er');
   Object.assign(st,{name:d.name.trim(),tagline:String(d.tagline||'').trim(),phone:String(d.phone||'').trim(),email:String(d.email||'').trim(),address:String(d.address||'').trim(),about:String(d.about||'').trim()||st.about,footer:String(d.footer||'').trim()||st.footer,primary:d.useP?d.primary:'',secondary:d.useS?d.secondary:'',defaultTheme:d.defaultTheme,shipCost:num(d.shipCost)||0,expressCost:num(d.expressCost)||0,freeOver:num(d.freeOver)||0});['instagram','telegram','whatsapp','linkedin'].forEach(k=>st.social[k]=String(d['so_'+k]||'').trim());S.db.meta.settings=Date.now();if(d.apass){S.db.admins[0].pass=pwHash(d.apass);S.db.meta.admins=Date.now()}persist({skipSupabase:true});
@@ -1707,7 +1747,7 @@ S.ui.slide=0;S.ui.heroTick=0;setInterval(()=>{const c=$('#car');if(!c){S.ui.hero
 async function boot(){loadState();applyTheme();
  if(!location.hash.startsWith('#/')&&location.hash){const id=location.hash.slice(1);history.replaceState(null,'','#/');setTimeout(()=>document.getElementById(id)?.scrollIntoView(),100)}
  const app=$('#app');app.innerHTML=header()+`<main id="main"><div class="wrap content"><div class="skel" style="height:340px;border-radius:24px;margin-top:20px"></div><div style="margin-top:30px">${skelGrid(8)}</div></div></main>`;
- await IMGDB.loadAll(); await loadProductsFromSupabase(); await loadSiteStateFromSupabase();
+ await IMGDB.loadAll(); await loadProductsFromSupabase(); await loadSiteStateFromSupabase(); await loadAnnouncementsFromSupabase();
  /* پاک‌سازی تصاویر بی‌استفاده */
  const used=new Set([...S.db.products.flatMap(p=>p.images),S.db.settings.logo].filter(r=>r&&r.startsWith('idb:')).map(r=>r.slice(4)));[...IMGDB.cache.keys()].forEach(k=>{if(!used.has(k))IMGDB.del(k)});
  LAST=parseRoute().name;render();
@@ -2277,6 +2317,41 @@ const INV={
   if(!prev){const o=ids.filter(x=>x.endsWith(':out')).length,l=ids.length-o;if(ids.length)db.alerts.unshift({id:uid('al'),kind:'info',pid:'',t:`بررسی اولیه انبار: ${fa(l)} کالا کم‌موجود و ${fa(o)} کالا ناموجود است.`,at:now,read:false})}
   db.meta.invLow=ids;if(db.alerts.length>200)db.alerts.length=200}};
 let _invT=0;
+
+function announcementFromRow(r){
+  return {
+    id:'sb-ann-'+r.id,
+    type:r.type||'admin',
+    title:r.title||'',
+    body:r.body||'',
+    link:r.link||'',
+    to:null,
+    at:r.created_at?new Date(r.created_at).getTime():Date.now()
+  };
+}
+function upsertAnnouncementRow(r){
+  const n=announcementFromRow(r);
+  S.db.notifs=S.db.notifs.filter(x=>x.id!==n.id);
+  S.db.notifs.push(n);
+  S.db.notifs.sort((a,b)=>(b.at||0)-(a.at||0));
+  if(S.db.notifs.length>300)S.db.notifs.length=300;
+}
+async function loadAnnouncementsFromSupabase(){
+  try{
+    const {data,error}=await SB.from('Notifications')
+      .select('id,title,body,type,link,created_at')
+      .is('target_user',null)
+      .order('created_at',{ascending:false})
+      .limit(300);
+    if(error)throw error;
+    (data||[]).reverse().forEach(upsertAnnouncementRow);
+    return true;
+  }catch(e){
+    console.error('SUPABASE_ANNOUNCEMENTS_LOAD_ERROR',e);
+    return false;
+  }
+}
+
 async function loadSiteStateFromSupabase(){
   try{
     if(typeof SB==='undefined')return;
