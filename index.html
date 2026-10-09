@@ -2316,55 +2316,96 @@ async function loadProductsFromSupabase(){
 }
 
 async function syncProductsToSupabase(){
-  try{
-    if(typeof SB==='undefined')return false;
-    if(!S.db||!Array.isArray(S.db.products))return false;
+  try {
+    if (typeof SB === 'undefined') return false;
+    if (!S.db || !Array.isArray(S.db.products)) return false;
 
-    const {data:existing,error:readError}=await SB
+    window.__SUPABASE_PRODUCT_SYNC_ERROR = '';
+
+    const { data: existing, error: readError } = await SB
       .from('Products')
       .select('id,data,sku');
 
-    if(readError){
-      window.__SUPABASE_PRODUCT_SYNC_ERROR=readError.message;
-      console.error('SUPABASE_PRODUCTS_READ_ERROR',readError);
+    if (readError) {
+      window.__SUPABASE_PRODUCT_SYNC_ERROR = readError.message;
+      console.error('SUPABASE_PRODUCTS_READ_ERROR', readError);
       return false;
     }
 
-    const dbIds=new Map();
-    for(const row of (existing||[])){
-      if(row&&row.id&&row.data&&row.data.id!=null){
-        dbIds.set(String(row.data.id),{id:row.id,sku:row.sku});
+    const dbIds = new Map();
+
+    for (const row of (existing || [])) {
+      if (row && row.id && row.data && row.data.id != null) {
+        dbIds.set(String(row.data.id), {
+          id: row.id,
+          sku: row.sku
+        });
       }
     }
 
-    const rows=S.db.products
-      .filter(p=>p&&p.id)
-      .map(p=>{
-        const old=dbIds.get(String(p.id));
-        return {
-          id:old?old.id:crypto.randomUUID(),
-          sku:(old&&old.sku)||p.sku||String(p.id),
-          data:p,
-          created_at:new Date(p.created||Date.now()).toISOString()
-        };
-      });
+    const products = S.db.products.filter(p => p && p.id);
 
-    if(!rows.length)return false;
+    // اگر محصولات موجود در دیتابیس قابل تطبیق نباشند،
+    // جلوی ارسال گروهی و ایجاد ردیف‌های تکراری را می‌گیریم.
+    const unmatched = products.filter(p => !dbIds.has(String(p.id)));
 
-    const {error}=await SB.from('Products').upsert(rows,{onConflict:'id'});
-
-    if(error){
-      console.error('SUPABASE_PRODUCTS_SYNC_ERROR',error);
-      window.__SUPABASE_PRODUCT_SYNC_ERROR=error.message||JSON.stringify(error);
+    if (unmatched.length > 1) {
+      const msg = 'توقف ایمن: چند محصول با ردیف‌های دیتابیس تطبیق ندارند؛ برای جلوگیری از محصولات تکراری ذخیره انجام نشد.';
+      window.__SUPABASE_PRODUCT_SYNC_ERROR = msg;
+      console.error(msg, unmatched.map(p => p.id));
       return false;
     }
 
-    console.log('SUPABASE_PRODUCTS_SYNC_OK',rows.length);
-    window.__SUPABASE_PRODUCT_SYNC_ERROR='';
+    const rows = products.map(p => {
+      const old = dbIds.get(String(p.id));
+      const price = Number(p.price) || 0;
+      const oldPrice = Number(p.old) || 0;
+      const images = Array.isArray(p.images) ? p.images : [];
+      const discount = oldPrice > price
+        ? Math.round((oldPrice - price) * 100 / oldPrice)
+        : 0;
+
+      return {
+        id: old ? old.id : crypto.randomUUID(),
+        sku: (old && old.sku) || p.sku || ('KL-' + String(p.id)),
+        name: String(p.name || 'محصول بدون نام'),
+        description: String(p.short || p.long || ''),
+        price,
+        old_price: oldPrice > 0 ? oldPrice : null,
+        category: String(p.cat || ''),
+        brand: String(p.brand || ''),
+        image_url: images[0] || null,
+        stock: Math.max(0, Math.floor(Number(p.stock) || 0)),
+        discount_percent: discount,
+        is_active: p.active !== false,
+        data: p,
+        created_at: new Date(
+          Number(p.created) || Date.now()
+        ).toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
+
+    if (!rows.length) return false;
+
+    const { error } = await SB
+      .from('Products')
+      .upsert(rows, { onConflict: 'id' });
+
+    if (error) {
+      window.__SUPABASE_PRODUCT_SYNC_ERROR =
+        error.message || JSON.stringify(error);
+      console.error('SUPABASE_PRODUCTS_SYNC_ERROR', error);
+      return false;
+    }
+
+    console.log('SUPABASE_PRODUCTS_SYNC_OK', rows.length);
+    window.__SUPABASE_PRODUCT_SYNC_ERROR = '';
     return true;
-  }catch(e){
-    console.error('SUPABASE_PRODUCTS_SYNC_EXCEPTION',e);
-    window.__SUPABASE_PRODUCT_SYNC_ERROR=e.message||String(e);
+
+  } catch (e) {
+    window.__SUPABASE_PRODUCT_SYNC_ERROR = e.message || String(e);
+    console.error('SUPABASE_PRODUCTS_SYNC_EXCEPTION', e);
     return false;
   }
 }
