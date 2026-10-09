@@ -2322,7 +2322,7 @@ async function syncProductsToSupabase(){
 
     const {data:existing,error:readError}=await SB
       .from('Products')
-      .select('id,data');
+      .select('id,data,sku');
 
     if(readError){
       window.__SUPABASE_PRODUCT_SYNC_ERROR=readError.message;
@@ -2333,17 +2333,21 @@ async function syncProductsToSupabase(){
     const dbIds=new Map();
     for(const row of (existing||[])){
       if(row&&row.id&&row.data&&row.data.id!=null){
-        dbIds.set(String(row.data.id),row.id);
+        dbIds.set(String(row.data.id),{id:row.id,sku:row.sku});
       }
     }
 
     const rows=S.db.products
       .filter(p=>p&&p.id)
-      .map(p=>({
-        id:dbIds.get(String(p.id))||crypto.randomUUID(),
-        data:p,
-        created_at:new Date(p.created||Date.now()).toISOString()
-      }));
+      .map(p=>{
+        const old=dbIds.get(String(p.id));
+        return {
+          id:old?old.id:crypto.randomUUID(),
+          sku:(old&&old.sku)||p.sku||String(p.id),
+          data:p,
+          created_at:new Date(p.created||Date.now()).toISOString()
+        };
+      });
 
     if(!rows.length)return false;
 
