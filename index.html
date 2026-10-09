@@ -839,6 +839,29 @@ const CONFIG={supabase:{url:'https://chyhxnkdewkslwrrpboq.supabase.co',key:'sb_p
 };
 const SB=window.supabase.createClient(CONFIG.supabase.url,CONFIG.supabase.key);
 
+// Supabase password recovery handler
+SB.auth.onAuthStateChange((event, session) => {
+  if (event !== 'PASSWORD_RECOVERY' || !session) return;
+
+  setTimeout(async () => {
+    const password = window.prompt('رمز جدید حساب Supabase را وارد کنید (حداقل 8 نویسه):');
+    if (password === null) return;
+    if (password.length < 8) {
+      window.alert('رمز باید حداقل 8 نویسه داشته باشد. دوباره لینک بازیابی را باز کنید.');
+      return;
+    }
+
+    const { error } = await SB.auth.updateUser({ password });
+    if (error) {
+      window.alert('تغییر رمز انجام نشد: ' + error.message);
+      return;
+    }
+
+    window.history.replaceState({}, document.title, location.pathname + location.search);
+    window.alert('رمز حساب Supabase با موفقیت تغییر کرد.');
+  }, 0);
+});
+
 /* ============================== UTILITIES ============================== */
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
