@@ -2320,11 +2320,30 @@ async function syncProductsToSupabase(){
     if(typeof SB==='undefined')return false;
     if(!S.db||!Array.isArray(S.db.products))return false;
 
-    const rows=S.db.products.map(p=>({
-      id:p.id,
-      data:p,
-      created_at:new Date(p.created||Date.now()).toISOString()
-    }));
+    const {data:existing,error:readError}=await SB
+      .from('Products')
+      .select('id,data');
+
+    if(readError){
+      window.__SUPABASE_PRODUCT_SYNC_ERROR=readError.message;
+      console.error('SUPABASE_PRODUCTS_READ_ERROR',readError);
+      return false;
+    }
+
+    const dbIds=new Map();
+    for(const row of (existing||[])){
+      if(row&&row.id&&row.data&&row.data.id!=null){
+        dbIds.set(String(row.data.id),row.id);
+      }
+    }
+
+    const rows=S.db.products
+      .filter(p=>p&&p.id)
+      .map(p=>({
+        id:dbIds.get(String(p.id))||crypto.randomUUID(),
+        data:p,
+        created_at:new Date(p.created||Date.now()).toISOString()
+      }));
 
     if(!rows.length)return false;
 
@@ -2337,14 +2356,14 @@ async function syncProductsToSupabase(){
     }
 
     console.log('SUPABASE_PRODUCTS_SYNC_OK',rows.length);
-return true;
+    window.__SUPABASE_PRODUCT_SYNC_ERROR='';
+    return true;
   }catch(e){
     console.error('SUPABASE_PRODUCTS_SYNC_EXCEPTION',e);
-window.__SUPABASE_PRODUCT_SYNC_ERROR=e.message||String(e);
-return false;
+    window.__SUPABASE_PRODUCT_SYNC_ERROR=e.message||String(e);
+    return false;
   }
 }
-
 function persist(options={}){try{if(S.db&&S.db.settings&&S.db.settings.invAlerts!==false)INV.scan()}catch(e){console.error(e)}const ok=persistBase();if(ok&&!options.skipSupabase)syncProductsToSupabase();return ok}
 
 /* ============================== V5: THEMES ============================== */
