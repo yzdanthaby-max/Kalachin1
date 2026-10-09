@@ -1500,8 +1500,8 @@ async function saveProduct(){const f=$('#pform');if(!f)return;const d=Object.fro
  PF.specs=PF.specs.map((s,i)=>[($(`[data-spec="${i}"][data-k="0"]`)?.value||'').trim(),($(`[data-spec="${i}"][data-k="1"]`)?.value||'').trim()]);
  if(formErr(f,e)){toast('خطاهای فرم را برطرف کنید','er');return}
  const now=Date.now();const data={name:d.name.trim(),brand:d.brand.trim(),brandFa:(d.brandFa||d.brand).trim(),cat:d.cat,price:Math.round(price),old:Math.round(old||0),stock,short:d.short.trim(),long:String(d.long||'').trim(),specs:PF.specs.filter(s=>s[0]&&s[1]),images:PF.images.slice(),tags:String(d.tags||'').split(/[،,]/).map(x=>x.trim()).filter(Boolean).slice(0,20),featured:!!d.featured,active:!!d.active,updated:now,...pfExtData(d)};
- if(PF.id){const p=PRODUCTS.get(PF.id);const wasOut=p.stock<=0;if(p.price!==data.price)logPrice(p,data.price);const oldImgs=p.images.filter(r=>r.startsWith('idb:')&&!data.images.includes(r));Object.assign(p,data);oldImgs.forEach(r=>IMGDB.del(r.slice(4)));if(wasOut&&p.stock>0)restockNotify(p);persist({skipSupabase:true});if(!(await syncProductsToSupabase())){toast('ذخیره در دیتابیس ناموفق بود؛ خطای کنسول را بررسی کنید.','er');return}toast('محصول ذخیره شد','ok')}
- else{const p={id:uid('p'),sold:0,rating:0,rcount:0,created:now,warranty:'۱۸ ماه گارانتی',priceLog:[[now,data.price]],...data};S.db.products.unshift(p);persist({skipSupabase:true});if(!(await syncProductsToSupabase())){toast('ذخیره در دیتابیس ناموفق بود؛ خطای کنسول را بررسی کنید.','er');return}if(p.active)NOTIF.push({type:'product',title:'محصول جدید: '+p.name.slice(0,40),body:p.short,link:'#/p/'+p.id});toast('محصول اضافه شد','ok')}
+ if(PF.id){const p=PRODUCTS.get(PF.id);const wasOut=p.stock<=0;if(p.price!==data.price)logPrice(p,data.price);const oldImgs=p.images.filter(r=>r.startsWith('idb:')&&!data.images.includes(r));Object.assign(p,data);oldImgs.forEach(r=>IMGDB.del(r.slice(4)));if(wasOut&&p.stock>0)restockNotify(p);persist({skipSupabase:true});if(!(await syncProductsToSupabase())){toast('خطای دیتابیس: '+(window.__SUPABASE_PRODUCT_SYNC_ERROR||'علت مشخص نشد'),'er');return}toast('محصول ذخیره شد','ok')}
+ else{const p={id:uid('p'),sold:0,rating:0,rcount:0,created:now,warranty:'۱۸ ماه گارانتی',priceLog:[[now,data.price]],...data};S.db.products.unshift(p);persist({skipSupabase:true});if(!(await syncProductsToSupabase())){toast('خطای دیتابیس: '+(window.__SUPABASE_PRODUCT_SYNC_ERROR||'علت مشخص نشد'),'er');return}if(p.active)NOTIF.push({type:'product',title:'محصول جدید: '+p.name.slice(0,40),body:p.short,link:'#/p/'+p.id});toast('محصول اضافه شد','ok')}
  closeLayer();renderMain()}
 function restockNotifyBase(p){(p.watchers||[]).forEach(w=>S.db.notifs.unshift({id:uid('n'),type:'restock',title:'«'+p.name.slice(0,40)+'» موجود شد',body:'کالایی که منتظرش بودید دوباره موجود است.',link:'#/p/'+p.id,to:w,at:Date.now()}));p.watchers=[]}
 function deleteProduct(id){const p=PRODUCTS.get(id);if(!p)return;confirmDlg('«'+p.name+'» حذف شود؟','حذف محصول',()=>{const idx=S.db.products.indexOf(p);S.db.products.splice(idx,1);tomb('products',id);CMP.del(id);S.cart=S.cart.filter(i=>i.id!==id);persistCart();persist();closeLayer();renderMain();EV.badges();let undone=false;toast('محصول حذف شد','',{label:'بازگردانی',fn:()=>{undone=true;untomb('products',id);p.updated=Date.now();S.db.products.splice(idx,0,p);persist();renderMain();toast('محصول بازگردانده شد','ok')}});setTimeout(()=>{if(!undone)p.images.filter(r=>r.startsWith('idb:')).forEach(r=>IMGDB.del(r.slice(4)))},6000)})}
@@ -2332,13 +2332,15 @@ async function syncProductsToSupabase(){
 
     if(error){
       console.error('SUPABASE_PRODUCTS_SYNC_ERROR',error);
-      return;
+      window.__SUPABASE_PRODUCT_SYNC_ERROR=error.message||JSON.stringify(error);
+      return false;
     }
 
     console.log('SUPABASE_PRODUCTS_SYNC_OK',rows.length);
 return true;
   }catch(e){
     console.error('SUPABASE_PRODUCTS_SYNC_EXCEPTION',e);
+window.__SUPABASE_PRODUCT_SYNC_ERROR=e.message||String(e);
 return false;
   }
 }
