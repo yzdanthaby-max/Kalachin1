@@ -1495,13 +1495,13 @@ const specRows=()=>PF.specs.map((s,i)=>`<div class="r"><input class="inp" data-s
 const imgsEd=()=>PF.images.map((r,i)=>`<div class="it ${i?'':'main'}"><img src="${imgSrc(r)}" alt="تصویر ${fa(i+1)}"><button type="button" class="x" data-act="img-rm" data-i="${i}" aria-label="حذف تصویر">${ic('x',14,2.6)}</button><button type="button" class="m" data-act="img-main" data-i="${i}">${i?'انتخاب اصلی':'تصویر اصلی'}</button></div>`).join('')+(PF.images.length<8?`<label class="up">${ic('upload',22)}<span>آپلود تصویر<br>(چندتایی)</span><input type="file" accept="image/*" multiple hidden data-upload="1"></label>`:'');
 function compressImage(file){return new Promise((res,rej)=>{if(!/^image\/(png|jpe?g|webp|gif)$/.test(file.type))return rej(new Error('فقط تصویر PNG، JPG یا WEBP مجاز است'));if(file.size>15*1024*1024)return rej(new Error('حجم تصویر بیش از ۱۵ مگابایت است'));const rd=new FileReader();rd.onerror=()=>rej(new Error('خواندن فایل ناموفق بود'));rd.onload=()=>{const im=new Image();im.onerror=()=>rej(new Error('فایل تصویر معتبر نیست'));im.onload=()=>{const m=CONFIG.maxImage,sc=Math.min(1,m/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*sc);c.height=Math.round(im.height*sc);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.84))};im.src=rd.result};rd.readAsDataURL(file)})}
 async function uploadImgs(files,target='product'){const arr=[...files].slice(0,target==='logo'?1:8-PF.images.length);let n=0;for(const f of arr){try{const d=await compressImage(f);const k=uid('img');await IMGDB.put(k,d);if(target==='logo'){const old=S.db.settings.logo;S.db.settings.logo='idb:'+k;if(old&&old.startsWith('idb:'))IMGDB.del(old.slice(4));persist();render();toast('لوگو به‌روز شد','ok');return}PF.images.push('idb:'+k);n++}catch(e){toast(e.message,'er')}}if(n){$('#pimgs').innerHTML=imgsEd();toast(fa(n)+' تصویر اضافه شد','ok')}}
-function saveProduct(){const f=$('#pform');if(!f)return;const d=Object.fromEntries(new FormData(f));const e={};const price=num(d.price),old=d.old?num(d.old):0,stock=num(d.stock);
+async function saveProduct(){const f=$('#pform');if(!f)return;const d=Object.fromEntries(new FormData(f));const e={};const price=num(d.price),old=d.old?num(d.old):0,stock=num(d.stock);
  if(String(d.name).trim().length<3)e.name='نام محصول حداقل ۳ حرف است.';if(!String(d.brand).trim())e.brand='برند را وارد کنید.';if(!(price>0))e.price='قیمت معتبر وارد کنید.';if(old&&!(old>price))e.old='قیمت قبلی باید بیشتر از قیمت فروش باشد.';if(isNaN(old))e.old='عدد معتبر وارد کنید.';if(!(stock>=0)||!Number.isInteger(stock))e.stock='موجودی باید عدد صحیح باشد.';if(String(d.short).trim().length<5)e.short='توضیح کوتاه را بنویسید.';if(!PF.images.length)e.images='حداقل یک تصویر آپلود کنید.';
  PF.specs=PF.specs.map((s,i)=>[($(`[data-spec="${i}"][data-k="0"]`)?.value||'').trim(),($(`[data-spec="${i}"][data-k="1"]`)?.value||'').trim()]);
  if(formErr(f,e)){toast('خطاهای فرم را برطرف کنید','er');return}
  const now=Date.now();const data={name:d.name.trim(),brand:d.brand.trim(),brandFa:(d.brandFa||d.brand).trim(),cat:d.cat,price:Math.round(price),old:Math.round(old||0),stock,short:d.short.trim(),long:String(d.long||'').trim(),specs:PF.specs.filter(s=>s[0]&&s[1]),images:PF.images.slice(),tags:String(d.tags||'').split(/[،,]/).map(x=>x.trim()).filter(Boolean).slice(0,20),featured:!!d.featured,active:!!d.active,updated:now,...pfExtData(d)};
- if(PF.id){const p=PRODUCTS.get(PF.id);const wasOut=p.stock<=0;if(p.price!==data.price)logPrice(p,data.price);const oldImgs=p.images.filter(r=>r.startsWith('idb:')&&!data.images.includes(r));Object.assign(p,data);oldImgs.forEach(r=>IMGDB.del(r.slice(4)));if(wasOut&&p.stock>0)restockNotify(p);persist();toast('محصول ذخیره شد','ok')}
- else{const p={id:uid('p'),sold:0,rating:0,rcount:0,created:now,warranty:'۱۸ ماه گارانتی',priceLog:[[now,data.price]],...data};S.db.products.unshift(p);persist();if(p.active)NOTIF.push({type:'product',title:'محصول جدید: '+p.name.slice(0,40),body:p.short,link:'#/p/'+p.id});toast('محصول اضافه شد','ok')}
+ if(PF.id){const p=PRODUCTS.get(PF.id);const wasOut=p.stock<=0;if(p.price!==data.price)logPrice(p,data.price);const oldImgs=p.images.filter(r=>r.startsWith('idb:')&&!data.images.includes(r));Object.assign(p,data);oldImgs.forEach(r=>IMGDB.del(r.slice(4)));if(wasOut&&p.stock>0)restockNotify(p);persist({skipSupabase:true});if(!(await syncProductsToSupabase())){toast('ذخیره در دیتابیس ناموفق بود؛ خطای کنسول را بررسی کنید.','er');return}toast('محصول ذخیره شد','ok')}
+ else{const p={id:uid('p'),sold:0,rating:0,rcount:0,created:now,warranty:'۱۸ ماه گارانتی',priceLog:[[now,data.price]],...data};S.db.products.unshift(p);persist({skipSupabase:true});if(!(await syncProductsToSupabase())){toast('ذخیره در دیتابیس ناموفق بود؛ خطای کنسول را بررسی کنید.','er');return}if(p.active)NOTIF.push({type:'product',title:'محصول جدید: '+p.name.slice(0,40),body:p.short,link:'#/p/'+p.id});toast('محصول اضافه شد','ok')}
  closeLayer();renderMain()}
 function restockNotifyBase(p){(p.watchers||[]).forEach(w=>S.db.notifs.unshift({id:uid('n'),type:'restock',title:'«'+p.name.slice(0,40)+'» موجود شد',body:'کالایی که منتظرش بودید دوباره موجود است.',link:'#/p/'+p.id,to:w,at:Date.now()}));p.watchers=[]}
 function deleteProduct(id){const p=PRODUCTS.get(id);if(!p)return;confirmDlg('«'+p.name+'» حذف شود؟','حذف محصول',()=>{const idx=S.db.products.indexOf(p);S.db.products.splice(idx,1);tomb('products',id);CMP.del(id);S.cart=S.cart.filter(i=>i.id!==id);persistCart();persist();closeLayer();renderMain();EV.badges();let undone=false;toast('محصول حذف شد','',{label:'بازگردانی',fn:()=>{undone=true;untomb('products',id);p.updated=Date.now();S.db.products.splice(idx,0,p);persist();renderMain();toast('محصول بازگردانده شد','ok')}});setTimeout(()=>{if(!undone)p.images.filter(r=>r.startsWith('idb:')).forEach(r=>IMGDB.del(r.slice(4)))},6000)})}
@@ -2220,15 +2220,15 @@ function loadState(){loadStateV2();try{migrateV3()}catch(e){console.error(e)}S.a
 AUTH.login=(id,pass)=>{if(!LOCK.ok('login'))return{err:'تلاش‌های ناموفق زیاد بود. '+fa(LOCK.left('login'))+' ثانیه دیگر دوباره امتحان کنید.'};id=toEn(String(id||'')).trim();const lid=id.toLowerCase();const u=S.db.users.find(x=>x.mobile===id||(x.username&&x.username===lid));
  if(!u||!pwCheck(u,pass,'kalano')){LOCK.hit('login',5,30000);return{err:'نام کاربری/شماره موبایل یا رمز عبور اشتباه است.'}}if(u.blocked)return{err:'این حساب توسط مدیر غیرفعال شده است. با پشتیبانی تماس بگیرید.'};LOCK.reset('login');AUTH.start(u);return{ok:true}};
 AUTH.adminLogin=(user,pass)=>{if(!LOCK.ok('adm'))return{err:'به دلیل تلاش‌های ناموفق، ورود تا '+fa(LOCK.left('adm'))+' ثانیه قفل است.'};const a=S.db.admins.find(x=>x.username===String(user).trim().toLowerCase());if(!a||!pwCheck(a,pass,'kalano-admin')){LOCK.hit('adm',5,60000);return{err:'نام کاربری یا رمز مدیر اشتباه است.'}}LOCK.reset('adm');S.admin=true;ADMSESS.make();try{logAct('ورود مدیر به پنل')}catch(e){}return{ok:true}};
-AUTH.adminLogout=()=>{S.admin=false;ADMSESS.clear()};
+AUTH.adminLogout=()=>{S.admin=false;ADMSESS.clear();SB.auth.signOut().catch(()=>{})};
 const _loginOtp=AUTH.loginOtp;AUTH.loginOtp=m=>{const u=S.db.users.find(x=>x.mobile===m);if(u&&u.blocked)return{err:'این حساب غیرفعال شده است.'};return _loginOtp(m)};
 FORMS.login=f=>{const id=toEn(f.elements.mobile.value).trim(),p=f.elements.pass.value;const e={};if(!VALID.mobile(id)&&!USERNAME_RE.test(id.toLowerCase()))e.mobile='شماره موبایل (۰۹...) یا نام کاربری معتبر وارد کنید.';if(!p)e.pass='رمز عبور را وارد کنید.';if(formErr(f,e))return;
  const st=S.db.settings;if(st.authMode==='api'){const b=f.querySelector('[type=submit]');b.disabled=true;apiPost(safeEp(st.authEndpoint)+'/login',{id,password:p}).then(r=>{if(!r.ok||!r.user)throw new Error(r.error||'ورود ناموفق بود');let u=S.db.users.find(x=>x.mobile===r.user.mobile);if(!u){u={id:uid('u'),name:String(r.user.name||'کاربر').slice(0,80),mobile:String(r.user.mobile||'').slice(0,11),email:'',pass:'',username:'',created:Date.now(),updated:Date.now(),points:0,addresses:[]};S.db.users.push(u);persist()}AUTH.start(u);afterLogin(f.dataset.next)}).catch(er=>formErr(f,{pass:er.message})).finally(()=>b.disabled=false);return}
  if(!VALID.mobile(id)&&S.db.admins.some(a=>a.username===id.toLowerCase())&&!S.db.users.some(u=>u.username===id.toLowerCase())){const ar=AUTH.adminLogin(id,p);if(ar.ok){toast('به پنل مدیریت خوش آمدید','ok');go('#/admin');setTimeout(render,30);return}formErr(f,{pass:ar.err});return}
  const r=AUTH.login(id,p);if(r.err){formErr(f,{pass:r.err});return}afterLogin(f.dataset.next)};
-FORMS.adm=f=>{const st=S.db.settings;const u=f.elements.user.value,p=f.elements.pass.value;if(!u||!p){$('#aderr').textContent='نام کاربری و رمز را وارد کنید.';return}
+FORMS.adm=async f=>{const st=S.db.settings;const u=String(f.elements.user.value||'').trim(),p=f.elements.pass.value;if(!u||!p){$('#aderr').textContent='نام کاربری و رمز را وارد کنید.';return}
  if(st.authMode==='api'){apiPost(safeEp(st.authEndpoint)+'/admin-login',{username:u,password:p}).then(r=>{if(!r.ok)throw new Error(r.error||'ورود ناموفق بود');S.admin=true;ADMSESS.make();toast('به پنل مدیریت خوش آمدید','ok');render()}).catch(er=>{$('#aderr').textContent=er.message});return}
- const r=AUTH.adminLogin(u,p);if(r.err){$('#aderr').textContent=r.err;f.elements.pass.value='';return}toast('به پنل مدیریت خوش آمدید','ok');render()};
+ try{if(u.toLowerCase()!=='kalachinshop@gmail.com')throw new Error('ایمیل حساب مدیر را در قسمت نام کاربری وارد کنید.');const {data,error}=await SB.auth.signInWithPassword({email:u,password:p});if(error)throw error;if(!data.user||data.user.id!=='12f2c2b7-e34b-4618-b4fd-81ee7c526988'){await SB.auth.signOut();throw new Error('این حساب مجوز مدیریت کالاچین را ندارد.')}S.admin=true;ADMSESS.make();toast('ورود مدیر و اتصال دیتابیس موفق بود','ok');render()}catch(e){$('#aderr').textContent=e.message||'ورود مدیر ناموفق بود.';f.elements.pass.value=''}};
 const _reg=FORMS.reg;FORMS.reg=(f,e)=>{if(S.db.settings.regOn===false)return toast('ثبت‌نام جدید فعلاً بسته است','er');return _reg(f,e)};
 const _prof=FORMS.profile;FORMS.profile=(f,e)=>{const u=AUTH.user();if(!u)return;const un=String(f.elements.username?.value||'').trim().toLowerCase();if(un&&!USERNAME_RE.test(un))return formErr(f,{username:'۳ تا ۳۰ حرف انگلیسی کوچک، عدد، _ یا . و با حرف شروع شود.'});if(un&&S.db.users.some(x=>x.id!==u.id&&x.username===un))return formErr(f,{username:'این نام کاربری قبلاً گرفته شده است.'});u.username=un;return _prof(f,e)};
 function viewLogin(qs){const st=S.db.settings;if(st.loginPass===false&&st.loginOtp!==false)S.ui.authMode='otp';if(st.loginOtp===false)S.ui.authMode='pass';if(st.regOn===false&&S.ui.authTab==='reg')S.ui.authTab='login';let x=viewLoginBase(qs);
@@ -2317,8 +2317,8 @@ async function loadProductsFromSupabase(){
 
 async function syncProductsToSupabase(){
   try{
-    if(typeof SB==='undefined')return;
-    if(!S.db||!Array.isArray(S.db.products))return;
+    if(typeof SB==='undefined')return false;
+    if(!S.db||!Array.isArray(S.db.products))return false;
 
     const rows=S.db.products.map(p=>({
       id:p.id,
@@ -2326,7 +2326,7 @@ async function syncProductsToSupabase(){
       created_at:p.created||Date.now()
     }));
 
-    if(!rows.length)return;
+    if(!rows.length)return false;
 
     const {error}=await SB.from('Products').upsert(rows,{onConflict:'id'});
 
@@ -2336,12 +2336,14 @@ async function syncProductsToSupabase(){
     }
 
     console.log('SUPABASE_PRODUCTS_SYNC_OK',rows.length);
+return true;
   }catch(e){
     console.error('SUPABASE_PRODUCTS_SYNC_EXCEPTION',e);
+return false;
   }
 }
 
-function persist(){try{if(S.db&&S.db.settings&&S.db.settings.invAlerts!==false)INV.scan()}catch(e){console.error(e)}const ok=persistBase();if(ok)syncProductsToSupabase();return ok}
+function persist(options={}){try{if(S.db&&S.db.settings&&S.db.settings.invAlerts!==false)INV.scan()}catch(e){console.error(e)}const ok=persistBase();if(ok&&!options.skipSupabase)syncProductsToSupabase();return ok}
 
 /* ============================== V5: THEMES ============================== */
 THEMES.push({id:'warmlux',name:'لاکچری گرم',c:['#F7F4EF','#ffffff','#A58B70','#1C1C1C'],d:0},{id:'rosegarden',name:'رز',c:['#F8E8E8','#FFF9F7','#8B3A4A','#3a1d24'],d:0},{id:'modernblue',name:'آبی مدرن',c:['#EAF2FF','#ffffff','#3157D5','#111827'],d:0},{id:'naturalgreen',name:'سبز طبیعی',c:['#F6F5EF','#ffffff','#315C45','#B59B7A'],d:0},{id:'burgundy',name:'شرابی تیره',c:['#171717','#222020','#9E2F3F','#F4F1EA'],d:1});
