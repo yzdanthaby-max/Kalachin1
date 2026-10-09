@@ -1700,7 +1700,7 @@ const FORMS={
 
 /* ============================== EVENT DELEGATION ============================== */
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!e.target.closest('.srch'))closeDrop();if(!e.target.closest('.mm'))$$('.mm.open').forEach(m=>m.classList.remove('open'));if(!t)return;const a=t.dataset.act;const fn=ACT[a];if(!fn)return;if(t.tagName==='A'&&a==='sgo'){e.preventDefault()}else if(t.tagName!=='A'||['support','ptab','jump','pop-go'].includes(a))e.preventDefault();if(a==='close'&&t.classList.contains('scrim')&&e.target!==t)return;try{fn(t,e)}catch(err){console.error(err);toast('خطا: '+err.message,'er')}});
-document.addEventListener('submit',e=>{const f=e.target.closest('form[data-form]');if(!f)return;e.preventDefault();const fn=FORMS[f.dataset.form];if(!fn)return;try{fn(f,e)}catch(err){console.error(err);toast('خطا: '+err.message,'er')}});
+document.addEventListener('submit',e=>{const f=e.target.closest('form[data-form]');if(!f)return;e.preventDefault();const fn=FORMS[f.dataset.form];if(!fn)return;try{Promise.resolve(fn(f,e)).catch(err=>{console.error(err);toast('خطا: '+(err.message||err),'er')})}catch(err){console.error(err);toast('خطا: '+err.message,'er')}});
 document.addEventListener('input',e=>{const t=e.target;
  if(t.id==='q'){searchDrop();return}
  if(t.closest('[data-draft]')){draft()[t.name]=t.value;saveDraft();return}
