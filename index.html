@@ -1644,8 +1644,18 @@ const FORMS={
  areply:f=>{const t=f.elements.t.value.trim();if(!t)return;const k=f.dataset.k;const c=S.db.chats[k];c.msgs.push({from:'admin',text:t.slice(0,1000),at:Date.now()});c.updated=Date.now();S.db.notifs.unshift({id:uid('n'),type:'admin',title:'پاسخ پشتیبانی',body:t.slice(0,140),link:'',to:k,at:Date.now()});persist();renderMain();setTimeout(()=>{const a=$('#achat');if(a)a.scrollTop=a.scrollHeight;$('[data-form=areply] input')?.focus()},20);toast('پاسخ ارسال شد','ok')},
  bcast:f=>{const d=Object.fromEntries(new FormData(f));const e={};if(String(d.title).trim().length<3)e.title='عنوان را وارد کنید.';if(String(d.body).trim().length<5)e.body='متن را وارد کنید.';if(formErr(f,e))return;NOTIF.push({type:d.type,title:d.title.trim(),body:d.body.trim(),link:/^#\//.test(d.link)?d.link:'',to:d.to||null});S.db.sent.push({at:Date.now(),title:d.title});persist();renderMain();toast('اعلان ارسال شد','ok')},
  umsg:f=>{const t=f.elements.title.value.trim(),b=f.elements.body.value.trim();if(t.length<3||b.length<3)return toast('عنوان و متن را وارد کنید','er');NOTIF.push({type:'admin',title:t,body:b,to:f.dataset.id});closeLayer();toast('پیام برای کاربر ارسال شد','ok')},
- settings:f=>{const d=Object.fromEntries(new FormData(f));const st=S.db.settings;const e={};if(String(d.name).trim().length<2)e.name='نام فروشگاه را وارد کنید.';if(d.email&&!VALID.email(d.email.trim()))e.email='ایمیل معتبر نیست.';['instagram','telegram','whatsapp','linkedin'].forEach(k=>{const v=String(d['so_'+k]||'').trim();if(v&&!/^https:\/\//.test(v))e['so_'+k]='آدرس باید با https:// شروع شود.'});if(d.apass&&!VALID.pass(d.apass))e.apass='حداقل ۸ کاراکتر با حرف و عدد.';if(formErr(f,e))return toast('خطاهای فرم را برطرف کنید','er');
-  Object.assign(st,{name:d.name.trim(),tagline:String(d.tagline||'').trim(),phone:String(d.phone||'').trim(),email:String(d.email||'').trim(),address:String(d.address||'').trim(),about:String(d.about||'').trim()||st.about,footer:String(d.footer||'').trim()||st.footer,primary:d.useP?d.primary:'',secondary:d.useS?d.secondary:'',defaultTheme:d.defaultTheme,shipCost:num(d.shipCost)||0,expressCost:num(d.expressCost)||0,freeOver:num(d.freeOver)||0});['instagram','telegram','whatsapp','linkedin'].forEach(k=>st.social[k]=String(d['so_'+k]||'').trim());S.db.meta.settings=Date.now();if(d.apass){S.db.admins[0].pass=pwHash(d.apass);S.db.meta.admins=Date.now()}persist();render();toast('تنظیمات ذخیره شد','ok')}
+ settings:async f=>{const d=Object.fromEntries(new FormData(f));const st=S.db.settings;const e={};if(String(d.name).trim().length<2)e.name='نام فروشگاه را وارد کنید.';if(d.email&&!VALID.email(d.email.trim()))e.email='ایمیل معتبر نیست.';['instagram','telegram','whatsapp','linkedin'].forEach(k=>{const v=String(d['so_'+k]||'').trim();if(v&&!/^https:\/\//.test(v))e['so_'+k]='آدرس باید با https:// شروع شود.'});if(d.apass&&!VALID.pass(d.apass))e.apass='حداقل ۸ کاراکتر با حرف و عدد.';if(formErr(f,e))return toast('خطاهای فرم را برطرف کنید','er');
+  Object.assign(st,{name:d.name.trim(),tagline:String(d.tagline||'').trim(),phone:String(d.phone||'').trim(),email:String(d.email||'').trim(),address:String(d.address||'').trim(),about:String(d.about||'').trim()||st.about,footer:String(d.footer||'').trim()||st.footer,primary:d.useP?d.primary:'',secondary:d.useS?d.secondary:'',defaultTheme:d.defaultTheme,shipCost:num(d.shipCost)||0,expressCost:num(d.expressCost)||0,freeOver:num(d.freeOver)||0});['instagram','telegram','whatsapp','linkedin'].forEach(k=>st.social[k]=String(d['so_'+k]||'').trim());S.db.meta.settings=Date.now();if(d.apass){S.db.admins[0].pass=pwHash(d.apass);S.db.meta.admins=Date.now()}persist({skipSupabase:true});
+  try {
+    await savePublicSiteSettingsToSupabase();
+    render();
+    toast('تنظیمات ذخیره شد و برای بازدیدکنندگان اعمال شد','ok');
+  } catch(err) {
+    console.error('SUPABASE_SITE_STATE_SAVE_ERROR',err);
+    render();
+    toast('ذخیره سراسری ناموفق بود: '+(err.message||err),'er');
+  }
+}
 };
 
 /* ============================== EVENT DELEGATION ============================== */
@@ -2287,6 +2297,63 @@ async function loadSiteStateFromSupabase(){
   }catch(e){
     console.error('SUPABASE_SITE_STATE_LOAD_EXCEPTION',e);
   }
+}
+
+
+async function savePublicSiteSettingsToSupabase(){
+  if(typeof SB==='undefined') throw new Error('اتصال سوپابیس در دسترس نیست.');
+
+  const {data:authData,error:authError}=await SB.auth.getUser();
+  if(authError) throw authError;
+
+  if(!authData.user ||
+     authData.user.id!=='12f2c2b7-e34b-4618-b4fd-81ee7c526988'){
+    throw new Error('برای ذخیره سراسری باید با حساب مدیر سوپابیس وارد شده باشی.');
+  }
+
+  const st=S.db.settings;
+  const publicSettings={
+    name:st.name || '',
+    tagline:st.tagline || '',
+    phone:st.phone || '',
+    email:st.email || '',
+    address:st.address || '',
+    about:st.about || '',
+    footer:st.footer || '',
+    social:{
+      instagram:st.social?.instagram || '',
+      telegram:st.social?.telegram || '',
+      whatsapp:st.social?.whatsapp || '',
+      linkedin:st.social?.linkedin || ''
+    }
+  };
+
+  const {data:current,error:readError}=await SB.from('SiteState')
+    .select('Data')
+    .eq('id','main')
+    .maybeSingle();
+
+  if(readError) throw readError;
+  if(!current) throw new Error('ردیف main در جدول SiteState پیدا نشد.');
+
+  const mergedData={
+    ...(current.Data && typeof current.Data==='object' ? current.Data : {}),
+    settings:publicSettings
+  };
+
+  const {data,error}=await SB.from('SiteState')
+    .update({
+      Data:mergedData,
+      updated_at:new Date().toISOString()
+    })
+    .eq('id','main')
+    .select('id')
+    .maybeSingle();
+
+  if(error) throw error;
+  if(!data) throw new Error('ردیف main به‌روزرسانی نشد؛ دسترسی مدیر و سیاست‌های جدول را بررسی کن.');
+
+  console.log('SUPABASE_SITE_STATE_SAVE_OK');
 }
 
 async function loadProductsFromSupabase(){
