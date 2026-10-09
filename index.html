@@ -2367,7 +2367,7 @@ async function syncProductsToSupabase(){
 
       return {
         id: old ? old.id : crypto.randomUUID(),
-        sku: (old && old.sku) || p.sku || ('KL-' + String(p.id)),
+        sku: old ? old.sku : ('KL-' + crypto.randomUUID().replace(/-/g, '').toUpperCase()),
         name: String(p.name || 'محصول بدون نام'),
         description: String(p.short || p.long || ''),
         price,
