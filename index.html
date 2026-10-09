@@ -2323,7 +2323,7 @@ async function syncProductsToSupabase(){
     const rows=S.db.products.map(p=>({
       id:p.id,
       data:p,
-      created_at:p.created||Date.now()
+      created_at:new Date(p.created||Date.now()).toISOString()
     }));
 
     if(!rows.length)return false;
