@@ -1315,6 +1315,10 @@ function viewProduct(id){const p=PRODUCTS.get(id);if(!p||!p.active)return `${bc(
  <aside class="buybox" id="buybox" aria-label="خرید">${buyboxInner(p)}</aside></article>
  <nav class="ptabs" aria-label="بخش‌های محصول">${[['desc','توضیحات'],['spec','مشخصات فنی'],['rev','دیدگاه‌ها ('+fa(revs.length)+')']].map(t=>`<a href="#${t[0]}" data-act="ptab" data-v="${t[0]}" class="${S.ui.ptab===t[0]?'on':''}">${t[1]}</a>`).join('')}</nav>
  <section id="desc" class="sec" style="margin-top:0"><h2 style="font-size:1.2rem;margin-bottom:12px">معرفی</h2><p class="longd" itemprop="description">${h(p.long||p.short)}</p></section>
+ <section id="product-options" class="sec" style="margin-top:0">
+ <h2 style="font-size:1.2rem;margin-bottom:14px">انتخاب رنگ و مشخصات</h2>
+ <div id="product-options-content"></div>
+ </section>
  <section id="spec" class="sec"><h2 style="font-size:1.2rem;margin-bottom:12px">مشخصات فنی</h2><table class="spec"><tbody><tr><td>برند</td><td>${h(p.brandFa)} (${h(p.brand)})</td></tr><tr><td>دسته‌بندی</td><td>${h(cat?.name||'—')}</td></tr>${specExtra(p)}${p.specs.map(s=>`<tr><td>${h(s[0])}</td><td>${h(s[1])}</td></tr>`).join('')}</tbody></table></section>
  <section id="rev" class="sec"><h2 style="font-size:1.2rem;margin-bottom:16px">امتیاز و دیدگاه کاربران</h2><div class="rv"><div class="rvs"><div class="row" style="align-items:flex-end"><span class="big">${fa(r.avg.toFixed(1))}</span><span class="muted">از ۵ • ${fa(sep(r.n))} امتیاز</span></div><div style="margin:14px 0">${[5,4,3,2,1].map((s,i)=>`<div class="rbar"><span>${fa(s)}</span><span class="t"><i style="width:${revs.length?Math.round(dist[i]/revs.length*100):0}%"></i></span><span class="muted">${fa(dist[i])}</span></div>`).join('')}</div>
  <form class="card" style="padding:16px" data-form="review" data-id="${h(p.id)}" novalidate><b style="display:block;margin-bottom:8px">دیدگاه شما</b>${AUTH.user()?`<div class="rate-in" role="radiogroup" aria-label="امتیاز">${[1,2,3,4,5].map(n=>`<button type="button" data-act="rate" data-v="${n}" aria-label="${fa(n)} ستاره" class="${(S.ui.rate||0)>=n?'on':''}">${ic('star',26)}</button>`).join('')}</div><textarea class="inp" name="text" rows="3" style="margin:10px 0" placeholder="تجربه‌تان از این کالا را بنویسید..." maxlength="1000"></textarea><div class="err sm" id="rverr" style="color:var(--er)"></div><button class="btn pri blk" type="submit">ثبت دیدگاه</button>`:`<p class="muted sm" style="margin-bottom:10px">برای ثبت دیدگاه وارد حساب شوید.</p><a class="btn blk" href="#/login?next=${encodeURIComponent('#/p/'+p.id)}">ورود | ثبت‌نام</a>`}</form></div>
@@ -2600,6 +2604,27 @@ THEMES.push({id:'warmlux',name:'لاکچری گرم',c:['#F7F4EF','#ffffff','#A5
 DARK_T.add('burgundy');
 const V5_THEME_IDS=['warmlux','rosegarden','modernblue','naturalgreen','burgundy'];
 
+
+function renderProductOptions(){
+ const box=$('#product-options-content');
+ const p=PRODUCTS.get(S.ui.routeParam);
+ if(!box||!p)return;
+ const colors=Array.isArray(p.colors)?p.colors:[];
+ const storageRaw=p.storage||p.capacity||'';
+ const storages=String(storageRaw).split(/[،,\/|؛;]/).map(x=>x.trim()).filter(Boolean);
+ box.innerHTML=`
+ <div class="card" style="padding:16px">
+ ${colors.length?`<div style="margin-bottom:16px"><b style="display:block;margin-bottom:10px">رنگ کالا</b><div class="row" style="gap:8px">${colors.map((c,i)=>`<button type="button" class="chip ${i===0?'on':''}" data-opt-color="${h(c)}" aria-pressed="${i===0}"><s style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${colorHex(c)};margin-left:6px;vertical-align:middle"></s>${h(c)}</button>`).join('')}</div></div>`:''}
+ ${storages.length>1?`<div style="margin-bottom:16px"><label for="product-storage" class="b" style="display:block;margin-bottom:8px">حافظه / ظرفیت</label><select id="product-storage" class="inp">${storages.map(x=>`<option value="${h(x)}">${h(x)}</option>`).join('')}</select></div>`:storages.length===1?`<p style="margin-bottom:14px"><b>حافظه / ظرفیت:</b> ${h(storages[0])}</p>`:''}
+ ${p.model?`<p style="margin-bottom:14px"><b>مدل:</b> ${h(p.model)}</p>`:''}
+ <button type="button" class="btn pri lg blk" data-act="add" data-id="${h(p.id)}" ${p.stock<=0?'aria-disabled="true"':''}>افزودن به سبد خرید</button>
+ </div>`;
+ box.querySelectorAll('[data-opt-color]').forEach(b=>b.addEventListener('click',()=>{
+   box.querySelectorAll('[data-opt-color]').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false')});
+   b.classList.add('on');b.setAttribute('aria-pressed','true');
+ }));
+}
+
 /* ============================== V5: PRODUCT PAGE ============================== */
 const REL_MAP={mobile:['acc','audio','watch'],laptop:['acc','audio','tv'],audio:['mobile','acc'],watch:['mobile','acc','audio'],gaming:['tv','audio','gaming'],camera:['acc','camera'],home:['home','acc'],acc:['mobile','laptop','audio'],tv:['gaming','audio','acc']};
 function pMeta(p){const c=PRODUCTS.cat(p.cat);const st=p.stock<=0?['ناموجود','er']:p.stock<=CONFIG.lowStock?['فقط '+fa(p.stock)+' عدد باقی مانده','wr']:['موجود در انبار ('+fa(p.stock)+' عدد)','ok'];
@@ -2878,4 +2903,24 @@ FORMS.integr=f=>{const d=Object.fromEntries(new FormData(f));const st=S.db.setti
 ACT['sms-test']=()=>{const m=toEn($('#ig-tm')?.value||'').trim();if(!VALID.mobile(m))return toast('شماره موبایل معتبر وارد کنید','er');const st=S.db.settings;if(st.smsMode!=='api')return toast('حالت آزمایشی: پیامکی ارسال نشد. کد نمونه: '+String(Math.floor(100000+Math.random()*900000)),'');apiPost(safeEp(st.smsEndpoint)+'/send',{mobile:m,purpose:'test'}).then(r=>toast(r.ok?'پیامک آزمایشی ارسال شد':'خطا: '+(r.error||'نامشخص'),r.ok?'ok':'er')).catch(e=>toast(e.message,'er'))};
 ACT['copy-sample']=()=>{const t=NETLIFY_SAMPLE;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('کد کپی شد','ok')).catch(()=>{const r=document.createRange();const el=$('#nsample');if(el){r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r)}toast('کد انتخاب شد؛ کپی کنید','')})};
 boot().catch(err=>{console.error(err);document.getElementById('app').innerHTML='<div style="padding:30px;text-align:center;font-family:Tahoma">خطا در اجرای فروشگاه: '+String(err.message).replace(/</g,'&lt;')+'<br><br><button onclick="try{localStorage.clear()}catch(e){};location.reload()">پاک کردن داده‌ها و شروع دوباره</button></div>'});
+/* اصلاح محدود: گزینه‌های خرید زیر توضیحات محصول */
+(function(){
+ let lastRoute='';
+ const refreshOptions=()=>{
+   if(S.ui.route==='p' && S.ui.routeParam){
+     renderProductOptions();
+   }
+ };
+ const originalRenderMain=renderMain;
+ renderMain=function(){
+   const result=originalRenderMain.apply(this,arguments);
+   refreshOptions();
+   return result;
+ };
+ document.addEventListener('click',e=>{
+   const a=e.target.closest('a[href^="#/p/"]');
+   if(a)setTimeout(refreshOptions,80);
+ });
+ setTimeout(refreshOptions,250);
+})();
 </script></body></html>
