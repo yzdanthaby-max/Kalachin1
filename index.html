@@ -736,87 +736,6 @@ img{max-width:100%}
 .fab{transition:transform .35s var(--e-out)}
 
 @media print{.hd,.ft,.ann-bar,.cmpbar,.bnav,.fab,#toasts,.noprint,.bc,.cart-cta,.mbuy{display:none!important}body{background:#fff;color:#000}.card{border:1px solid #bbb;box-shadow:none}main{padding:0}}
-
-
-/* Kalachin Liquid Glass — polished edition */
-html[data-theme="liquid"] {
-  color-scheme: light;
-  --bg: #edf4ff;
-  --sf: rgba(255,255,255,.76);
-  --sf2: rgba(255,255,255,.60);
-  --sf3: rgba(255,255,255,.42);
-  --ink: #202c43;
-  --mt: #687991;
-  --ln: rgba(104,137,184,.18);
-  --dk: #263c60;
-  --dk2: #365783;
-  --dki: #ffffff;
-  --dkm: #d9e6f8;
-  --p: #527fe8;
-  --pi: #ffffff;
-  --s: #77b5f7;
-  --glow: rgba(82,127,232,.22);
-  --sh: 0 5px 18px rgba(40,66,108,.055),
-        0 14px 38px rgba(68,112,180,.075);
-  --sh2: 0 18px 48px rgba(40,66,108,.14);
-}
-html[data-theme="liquid"] body {
-  background:
-    radial-gradient(ellipse at 8% 8%,rgba(153,199,255,.35),transparent 35%),
-    radial-gradient(ellipse at 92% 24%,rgba(193,177,255,.22),transparent 32%),
-    radial-gradient(ellipse at 48% 95%,rgba(136,211,230,.22),transparent 38%),
-    linear-gradient(145deg,#edf4ff 0%,#f8faff 52%,#e5efff 100%);
-  background-attachment: fixed;
-}
-html[data-theme="liquid"] .hd,
-html[data-theme="liquid"] .bnav {
-  background: rgba(248,251,255,.76);
-  -webkit-backdrop-filter: blur(24px) saturate(165%);
-  backdrop-filter: blur(24px) saturate(165%);
-  border-color: rgba(255,255,255,.85);
-  box-shadow: 0 5px 24px rgba(44,72,116,.065);
-}
-html[data-theme="liquid"] .pc {
-  background: linear-gradient(145deg,rgba(255,255,255,.83),rgba(255,255,255,.58));
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
-  backdrop-filter: blur(18px) saturate(145%);
-  border: 1px solid rgba(255,255,255,.92);
-  border-radius: 20px;
-  box-shadow: 0 5px 22px rgba(47,76,121,.065),
-              inset 0 1px 0 rgba(255,255,255,.92);
-  transition: transform .22s ease,box-shadow .22s ease,border-color .22s ease;
-}
-@media (hover:hover) and (pointer:fine) {
-  html[data-theme="liquid"] .pc:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 30px rgba(47,76,121,.12),
-                inset 0 1px 0 rgba(255,255,255,.96);
-    border-color: rgba(255,255,255,1);
-  }
-}
-html[data-theme="liquid"] .fav,
-html[data-theme="liquid"] .kpi,
-html[data-theme="liquid"] .qacts button,
-html[data-theme="liquid"] .qacts a {
-  -webkit-backdrop-filter: blur(14px) saturate(145%);
-  backdrop-filter: blur(14px) saturate(145%);
-  border-color: rgba(255,255,255,.84);
-  box-shadow: 0 3px 12px rgba(47,76,121,.06);
-}
-html[data-theme="liquid"] button,
-html[data-theme="liquid"] a {
-  -webkit-tap-highlight-color: transparent;
-}
-html[data-theme="liquid"] :focus-visible {
-  outline: 2px solid #527fe8;
-  outline-offset: 3px;
-}
-@media (prefers-reduced-motion: reduce) {
-  html[data-theme="liquid"] .pc {
-    transition: none;
-  }
-}
-
 </style>
 <style id="v5css">
 /* ===== V5 THEMES ===== */
@@ -1353,7 +1272,7 @@ function countdown(){const n=new Date(),e=new Date(n);e.setHours(23,59,59,999);l
 function sec(title,sub,more,body){return `<section class="sec"><div class="sh"><div><h2>${title}</h2>${sub?`<p>${sub}</p>`:''}</div>${more?`<a class="more" href="${more}">مشاهده همه ${ic('chev',16)}</a>`:''}</div>${body}</section>`}
 function viewHome(){const st=S.db.settings;const feat=PRODUCTS.featured();const slides=(feat.length?feat:PRODUCTS.best()).slice(0,4);const deals=PRODUCTS.deals().filter(p=>PRODUCTS.off(p)>0).slice(0,10);const cd=countdown();const nw=PRODUCTS.newest().slice(0,8);const best=PRODUCTS.best().slice(0,9);const c1=S.db.categories[2],c2=S.db.categories[3];
  const slideEyebrow=['پیشنهاد ویژه امروز','انتخاب سردبیر','پرطرفدارترین','تازه رسید'];
- return `<section class="hero" aria-label="بنر">${slides.length?`<div class="car" id="car" data-i="0"><div class="slides">${slides.map((p,i)=>`<div class="slide" aria-roledescription="اسلاید" aria-label="${fa(i+1)} از ${fa(slides.length)}"><div><div class="eb">${slideEyebrow[i%4]}${PRODUCTS.off(p)?' • ٪'+fa(PRODUCTS.off(p))+' تخفیف':''}</div><h2>${h(p.name.split(' ').slice(0,5).join(' '))}</h2><p>${h(p.short)}</p><div class="row"><a class="btn pri lg" href="#/p/${h(p.id)}">مشاهده و خرید ${ic('chev',18)}</a><span class="price" style="color:var(--dki)">${T(p.price)}</span></div></div><img src="${imgSrc(String(p.images?.[0]||'').replace(':0:',':1:'))}" alt="${h(p.name)}" ${i?'loading="lazy"':''}></div>`).join('')}</div><div class="dots" role="tablist">${slides.map((_,i)=>`<button data-act="slide" data-i="${i}" class="${i?'':'on'}" aria-label="اسلاید ${fa(i+1)}"></button>`).join('')}</div><div class="nav"><button data-act="slide" data-d="-1" aria-label="قبلی">${ic('chevr')}</button><button data-act="slide" data-d="1" aria-label="بعدی">${ic('chev')}</button></div></div>`:''}
+ return `<section class="hero" aria-label="بنر">${slides.length?`<div class="car" id="car" data-i="0"><div class="slides">${slides.map((p,i)=>`<div class="slide" aria-roledescription="اسلاید" aria-label="${fa(i+1)} از ${fa(slides.length)}"><div><div class="eb">${slideEyebrow[i%4]}${PRODUCTS.off(p)?' • ٪'+fa(PRODUCTS.off(p))+' تخفیف':''}</div><h2>${h(p.name.split(' ').slice(0,5).join(' '))}</h2><p>${h(p.short)}</p><div class="row"><a class="btn pri lg" href="#/p/${h(p.id)}">مشاهده و خرید ${ic('chev',18)}</a><span class="price" style="color:var(--dki)">${T(p.price)}</span></div></div><img src="${imgSrc(p.images[0].replace(':0:',':1:'))}" alt="${h(p.name)}" ${i?'loading="lazy"':''}></div>`).join('')}</div><div class="dots" role="tablist">${slides.map((_,i)=>`<button data-act="slide" data-i="${i}" class="${i?'':'on'}" aria-label="اسلاید ${fa(i+1)}"></button>`).join('')}</div><div class="nav"><button data-act="slide" data-d="-1" aria-label="قبلی">${ic('chevr')}</button><button data-act="slide" data-d="1" aria-label="بعدی">${ic('chev')}</button></div></div>`:''}
  <div class="side-b">${[c1,c2].filter(Boolean).map((c,i)=>`<a class="pb" href="#/shop?cat=${h(c.id)}" style="background:hsl(${c.hue},${i?45:55}%,${i?90:92}%);color:hsl(${c.hue},45%,20%)"><div><h3>${h(c.name)}</h3><p>${h(c.desc)}</p><span class="lnk">خرید کنید ${ic('chev',14)}</span></div><img src="${artUrl(`art:${c.icon}:${c.hue}:0:`)}" alt="" loading="lazy" style="border-radius:16px"></a>`).join('')}</div></section>
  <section class="sec" aria-label="دسته‌بندی‌ها"><div class="cats">${S.db.categories.map(c=>`<a class="cat" href="#/shop?cat=${h(c.id)}"><span class="ci" style="background:hsl(${c.hue},60%,93%)"><img src="${artUrl(`art:${c.icon}:${c.hue}:0:`)}" alt="" width="74" height="74" loading="lazy" style="border-radius:24px"></span>${h(c.name)}</a>`).join('')}</div></section>
  ${deals.length?`<section class="sec"><div class="deals"><div class="intro"><div><h2>پیشنهاد <em>شگفت‌انگیز</em> امروز</h2><p style="color:var(--dkm);font-size:.88rem">تا پایان امروز، فقط با این قیمت</p></div><div class="cd" id="cd" aria-label="زمان باقی‌مانده"><span>${cd[0]}</span><span>${cd[1]}</span><span>${cd[2]}</span></div><a class="btn pri" href="#/deals">همه تخفیف‌ها ${ic('chev',16)}</a></div><div class="scroller">${deals.map(card).join('')}</div></div></section>`:''}
@@ -1891,7 +1810,6 @@ const THEMES=[
  {id:'forest',name:'جنگل',c:['#eef5ef','#fbfdfb','#2f8f5b','#1f3a2c'],d:0},
  {id:'rose',name:'گلبهی',c:['#fbf0f2','#fffafb','#e0457b','#40202d'],d:0},
  {id:'mono',name:'سیاه و سفید',c:['#f4f4f4','#ffffff','#222222','#222222'],d:0},
- {id:'liquid',name:'Liquid Glass',c:['#EAF3FF','#FFFFFF','#5B8DEF','#20304A'],d:0},
  {id:'contrast',name:'کنتراست بالا',c:['#ffffff','#ffffff','#2d3bd8','#0a0a0a'],d:0}];
 const DARK_T=new Set(THEMES.filter(t=>t.d).map(t=>t.id));
 const ACCENTS=['','#f26b3a','#5b3df5','#0e9f94','#e0336e','#1f9d55','#2563eb','#d98a00','#9b3fd8','#111827'];
