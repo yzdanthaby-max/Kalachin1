@@ -2342,7 +2342,7 @@ FORMS.login=f=>{const id=toEn(f.elements.mobile.value).trim(),p=f.elements.pass.
  const r=AUTH.login(id,p);if(r.err){formErr(f,{pass:r.err});return}afterLogin(f.dataset.next)};
 FORMS.adm=async f=>{const st=S.db.settings;const u=String(f.elements.user.value||'').trim(),p=f.elements.pass.value;if(!u||!p){$('#aderr').textContent='نام کاربری و رمز را وارد کنید.';return}
  if(st.authMode==='api'){apiPost(safeEp(st.authEndpoint)+'/admin-login',{username:u,password:p}).then(r=>{if(!r.ok)throw new Error(r.error||'ورود ناموفق بود');S.admin=true;ADMSESS.make();toast('به پنل مدیریت خوش آمدید','ok');render()}).catch(er=>{$('#aderr').textContent=er.message});return}
- try{if(u.toLowerCase()!=='kalachinshop@gmail.com')throw new Error('ایمیل حساب مدیر را در قسمت نام کاربری وارد کنید.');const {data,error}=await SB.auth.signInWithPassword({email:u,password:p});if(error)throw error;if(!data.user||data.user.id!=='12f2c2b7-e34b-4618-b4fd-81ee7c526988'){await SB.auth.signOut();throw new Error('این حساب مجوز مدیریت کالاچین را ندارد.')}S.admin=true;ADMSESS.make();toast('ورود مدیر و اتصال دیتابیس موفق بود','ok');render()}catch(e){$('#aderr').textContent=e.message||'ورود مدیر ناموفق بود.';f.elements.pass.value=''}};
+ try{if(u.toLowerCase()!=='kalachinshop@gmail.com')throw new Error('ایمیل حساب مدیر را در قسمت نام کاربری وارد کنید.');const {data,error}=await SB.auth.signInWithPassword({email:u,password:p});if(error)throw error;if(!data.user||data.user.id!=='12f2c2b7-e34b-4618-b4fd-81ee7c526988'){await SB.auth.signOut();throw new Error('این حساب مجوز مدیریت کالاچین را ندارد.')}S.admin=true;ADMSESS.make();await loadOrdersFromSupabase();toast('ورود مدیر و اتصال دیتابیس موفق بود','ok');render()}catch(e){$('#aderr').textContent=e.message||'ورود مدیر ناموفق بود.';f.elements.pass.value=''}};
 const _reg=FORMS.reg;FORMS.reg=(f,e)=>{if(S.db.settings.regOn===false)return toast('ثبت‌نام جدید فعلاً بسته است','er');return _reg(f,e)};
 const _prof=FORMS.profile;FORMS.profile=(f,e)=>{const u=AUTH.user();if(!u)return;const un=String(f.elements.username?.value||'').trim().toLowerCase();if(un&&!USERNAME_RE.test(un))return formErr(f,{username:'۳ تا ۳۰ حرف انگلیسی کوچک، عدد، _ یا . و با حرف شروع شود.'});if(un&&S.db.users.some(x=>x.id!==u.id&&x.username===un))return formErr(f,{username:'این نام کاربری قبلاً گرفته شده است.'});u.username=un;return _prof(f,e)};
 function viewLogin(qs){const st=S.db.settings;if(st.loginPass===false&&st.loginOtp!==false)S.ui.authMode='otp';if(st.loginOtp===false)S.ui.authMode='pass';if(st.regOn===false&&S.ui.authTab==='reg')S.ui.authTab='login';let x=viewLoginBase(qs);
@@ -2518,6 +2518,39 @@ async function loadProductsFromSupabase(){
     }
   }catch(e){
     console.error('SUPABASE_PRODUCTS_LOAD_EXCEPTION',e);
+  }
+}
+
+
+async function loadOrdersFromSupabase(){
+  try{
+    if(!S.admin || !SB.auth) return false;
+    const {data:sessionData,error:sessionError}=await SB.auth.getSession();
+    if(sessionError || sessionData?.session?.user?.id!=='12f2c2b7-e34b-4618-b4fd-81ee7c526988'){
+      console.warn('SUPABASE_ORDERS_LOAD_SKIPPED: مدیر احراز هویت نشده است');
+      return false;
+    }
+    const {data,error}=await SB.from('Orders').select('*').order('created_at',{ascending:false});
+    if(error) throw error;
+    const rows=(data||[]).map(r=>({
+      id:r.id,serverId:r.id,uid:r.customer_id,customer:r.customer_name||'مشتری',
+      mobile:r.mobile||'',items:Array.isArray(r.items)?r.items.map(i=>({...i,img:i.img||''})):[],
+      sub:Number(r.subtotal)||0,disc:Number(r.discount)||0,ship:Number(r.shipping)||0,
+      total:Number(r.total)||0,pointsUsed:Number(r.points_used)||0,
+      ptsDisc:Number(r.points_discount)||0,coupon:r.coupon||'',method:r.method||'online',
+      plan:Number(r.plan)||0,delivery:r.delivery||{},address:r.address||{},
+      status:r.status||'pending',at:Date.parse(r.created_at)||Date.now(),
+      updated:Date.parse(r.updated_at)||Date.now(),
+      history:Array.isArray(r.history)?r.history:[],pay:r.payment||null
+    }));
+    const ids=new Set(rows.map(o=>o.id));
+    S.db.orders=S.db.orders.filter(o=>!o.serverId&&!ids.has(o.id)).concat(rows);
+    S.db.orders.sort((a,b)=>b.at-a.at);
+    console.log('SUPABASE_ORDERS_LOAD_OK',rows.length);
+    return true;
+  }catch(e){
+    console.error('SUPABASE_ORDERS_LOAD_ERROR',e);
+    return false;
   }
 }
 
