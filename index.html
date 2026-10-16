@@ -1617,7 +1617,7 @@ function seed(){const R=rng(2026),now=Date.now(),day=864e5;const P=[];
 
 /* ============================== VALIDATION ============================== */
 /* هر داده‌ای که از localStorage یا فایل پشتیبان خوانده می‌شود قبل از استفاده بررسی و پاک‌سازی می‌شود */
-const V={s:(v,max=2000,d='')=>typeof v==='string'?v.slice(0,max):d,n:(v,min=0,max=1e13,d=0)=>{const x=Number(v);return isFinite(x)?clamp(x,min,max):d},b:v=>!!v,a:v=>Array.isArray(v)?v:[],ref:v=>typeof v==='string'&&(/^art:[a-z]+:\d+:\d:(dark|light)?$/.test(v)||/^idb:[\w-]+$/.test(v))?v:null};
+const V={s:(v,max=2000,d='')=>typeof v==='string'?v.slice(0,max):d,n:(v,min=0,max=1e13,d=0)=>{const x=Number(v);return isFinite(x)?clamp(x,min,max):d},b:v=>!!v,a:v=>Array.isArray(v)?v:[],ref:v=>typeof v==='string'&&(/^art:[a-z]+:\d+:\d:(dark|light)?$/.test(v)||/^idb:[\w-]+$/.test(v)||/^https:\/\/[^\s"'<>]{4,1500}$/i.test(v))?v:null};
 function cleanProductBase(p){if(!p||typeof p!=='object'||!p.id||!p.name)return null;return{id:V.s(p.id,40),cat:V.s(p.cat,40),name:V.s(p.name,200),brand:V.s(p.brand,60),brandFa:V.s(p.brandFa,60),price:V.n(p.price),old:V.n(p.old),stock:Math.round(V.n(p.stock,0,1e6)),sold:Math.round(V.n(p.sold,0,1e9)),rating:V.n(p.rating,0,5),rcount:Math.round(V.n(p.rcount,0,1e9)),short:V.s(p.short,300),long:V.s(p.long,6000),specs:V.a(p.specs).filter(x=>Array.isArray(x)&&x.length===2).map(x=>[V.s(x[0],80),V.s(x[1],200)]).slice(0,40),images:V.a(p.images).map(V.ref).filter(Boolean).slice(0,10),featured:V.b(p.featured),active:p.active!==false,created:V.n(p.created,0,1e14,Date.now()),updated:V.n(p.updated,0,1e14,Date.now()),tags:V.a(p.tags).map(x=>V.s(x,40)).slice(0,20),warranty:V.s(p.warranty,120),watchers:V.a(p.watchers).filter(x=>typeof x==='string').slice(0,500),priceLog:V.a(p.priceLog).filter(x=>Array.isArray(x)&&x.length===2).map(x=>[V.n(x[0],0,1e14),V.n(x[1])]).slice(-40)}}
 function validateDbBase(o){if(!o||typeof o!=='object'||!Array.isArray(o.products))return null;const d=seed();const out={v:CONFIG.version};
  out.categories=V.a(o.categories).filter(c=>c&&c.id&&c.name).map(c=>({id:V.s(c.id,40),name:V.s(c.name,60),icon:V.s(c.icon,20,'phone'),hue:V.n(c.hue,0,360,250),desc:V.s(c.desc,120),updated:V.n(c.updated,0,1e14)}));
@@ -1652,7 +1652,7 @@ function loadStateBase(){let o=STORAGE.json(CONFIG.keys.db,null);let d=o?validat
 /* ============================== PRODUCTS ============================== */
 const PRODUCTS={
  all:()=>S.db.products,
- live:()=>S.db.products.filter(p=>p.active),
+ live:()=>S.db.products.filter(p=>p.active&&!p.gen&&!/^p(?:[1-9]|[12]\d|3[0-6])$/.test(String(p.id||''))),
  get:id=>byId(S.db.products,id),
  cat:id=>byId(S.db.categories,id),
  off:p=>p.old>p.price&&p.price>0?Math.round((p.old-p.price)/p.old*100):0,
@@ -1951,7 +1951,20 @@ function placeOrder(btn){if(S.ui.busy)return;const f=$('#ckform');if(!f)return;c
  if(!VALID.name(data.name))e.name='نام کامل را وارد کنید.';if(!VALID.mobile(data.mobile))e.mobile='موبایل باید ۱۱ رقم و با ۰۹ شروع شود.';if(!data.province)e.province='استان را انتخاب کنید.';if(data.city.length<2)e.city='شهر را وارد کنید.';if(data.address.length<10)e.address='نشانی را کامل بنویسید (حداقل ۱۰ حرف).';if(!VALID.postal(data.postal))e.postal='کد پستی ۱۰ رقم است.';
  $$('.err',f).forEach(x=>x.textContent='');$$('.inp',f).forEach(x=>x.classList.remove('bad'));if(Object.keys(e).length){for(const k in e){$(`[data-err="${k}"]`,f).textContent=e[k];f.elements[k].classList.add('bad')}f.elements[Object.keys(e)[0]].focus();toast('اطلاعات تحویل را کامل کنید','er');return}
  const d=draft();S.ui.busy=true;btn.classList.add('busy');const r=ORDERS.create({address:{name:data.name,mobile:data.mobile,province:data.province,city:data.city,address:data.address,postal:data.postal},delivery:d.delivery||'normal',method:d.method||'online',plan:+d.plan||6});
- if(r.err){S.ui.busy=false;btn.classList.remove('busy');toast(r.err,'er');renderMain();return}PAYMENT.start(r.order).then(x=>{S.ui.busy=false;go(x.url)})}
+ if(r.err){S.ui.busy=false;btn.classList.remove('busy');toast(r.err,'er');renderMain();return}
+const finishOrder=()=>PAYMENT.start(r.order).then(x=>{S.ui.busy=false;go(x.url)}).catch(e=>{S.ui.busy=false;toast('خطا در ادامه سفارش: '+e.message,'er')});
+if(CLOUD.on()&&CLOUD.cfg.orderFunction){
+ createOrderViaSupabase(r.order).then(z=>{
+  r.order.remote=z.ok?{ok:true,ref:z.res.orderId||z.res.order_id||z.res.id||'',status:z.res.status||'',pay:z.pay}:{ok:false,error:z.error};
+  persist();
+  if(!z.ok){S.ui.busy=false;btn.classList.remove('busy');toast('ثبت سفارش در سرور ناموفق بود: '+z.error,'er');go('#/pay/'+r.order.id);return}
+  finishOrder();
+ }).catch(e=>{
+  r.order.remote={ok:false,error:e.message||'خطای اتصال'};
+  persist();S.ui.busy=false;btn.classList.remove('busy');toast('ارتباط با سرور برقرار نشد؛ دوباره تلاش کن.','er');go('#/pay/'+r.order.id);
+ });
+}else finishOrder();
+}
 
 /* ============================== PAYMENT DEMO ============================== */
 function viewPay(id){const o=ORDERS.get(id);if(!o||o.uid!==S.session)return empty('err','سفارش پیدا نشد','این سفارش وجود ندارد یا متعلق به حساب شما نیست.','<a class="btn pri" href="#/account/orders">سفارش‌های من</a>');
@@ -3211,7 +3224,7 @@ let _stT=0;document.addEventListener('input',e=>{const i=e.target.closest&&e.tar
    فقط کلید عمومی (anon / publishable) مجاز است؛ کلید service_role یا sb_secret پذیرفته نمی‌شود.
    امنیت واقعی با RLS سمت Supabase است؛ این فایل هیچ قانون دسترسی را دور نمی‌زند. */
 const CLOUD_DEF={enabled:false,url:'',anonKey:'',tables:{products:'Products',site:'SiteState',notifications:'Notifications'},
- site:{keyColumn:'key',keyValue:'public_settings',valueColumn:'value'},
+ site:{keyColumn:'id',keyValue:'main',valueColumn:'Data'},
  productMap:{id:'id',sku:'sku',name:'name',brand:'brand',category:'category',price:'price',oldPrice:'old_price',stock:'stock',description:'description',image:'image_url',images:'images',data:'data',active:'active',created:'created_at',updated:'updated_at'},
  storageBucket:'',orderFunction:'create-order',adminUserId:'',replaceLocalCatalog:true,pageSize:1000,pushEdits:true,insertNew:false};
 const CLOUD={cfg:null,st:{state:'off',products:0,loadedAt:0,lastOk:null,lastErr:null,log:[],pending:0},sample:null,siteShape:null,busy:{},
@@ -3299,7 +3312,7 @@ const _admOut=AUTH.adminLogout;AUTH.adminLogout=()=>{if(CLOUD.ses()&&CLOUD.on())
 const _adminLoginView=adminLogin;adminLogin=function(){let x=_adminLoginView();if(CLOUD.on())x=x.replace('<label for="ad-u">نام کاربری</label>','<label for="ad-u">نام کاربری یا ایمیل مدیر (Supabase)</label>').replace('<div class="err sm" id="aderr"','<p class="xs muted" style="margin:-4px 0 8px">'+ic('lock',13)+' برای ذخیره تغییرات در دیتابیس، با ایمیل حساب مدیر Supabase وارد شوید.</p><div class="err sm" id="aderr"');return x};
 const _viewPayV5=viewPay;viewPay=function(id){const x=_viewPayV5(id);const o=ORDERS.get(id);if(!o||o.status!=='pending'||!CLOUD.on()||!CLOUD.cfg.orderFunction)return x;const rs=o.remote;
  const box=`<div class="card cloud-ord" style="margin-bottom:14px"><h3 style="margin-bottom:6px">${ic('shield',18)} ثبت سفارش در سرور فروشگاه</h3>${rs&&rs.ok?`<div class="alert ok" role="status">${ic('check',18)}<span>سفارش در سرور ثبت شد${rs.ref?' • شماره: <b class="ltr">'+h(String(rs.ref))+'</b>':''}. وضعیت پرداخت را فقط سرور/درگاه تأیید می‌کند.</span></div>${rs.pay?`<a class="btn pri lg blk" href="${h(rs.pay)}" rel="noopener">${ic('card',18)} رفتن به درگاه پرداخت</a>`:'<p class="sm muted">درگاه پرداختی از سرور برنگشت؛ پس از تأیید سرور، وضعیت سفارش به‌روز می‌شود.</p>'}`:`<p class="sm muted" style="margin-bottom:10px">قیمت و موجودی نهایی توسط سرور بررسی می‌شود؛ مبلغ این صفحه فقط پیش‌نمایش است.</p>${rs&&!rs.ok?`<div class="alert er" role="alert">${ic('alert',18)}<span>${h(rs.error)}</span></div>`:''}<button class="btn pri lg blk" data-act="cloud-order" data-id="${h(o.id)}">${ic('send',18)} ثبت سفارش در سرور</button>`}</div>`;
- return box+x.replace('درگاه پرداخت آزمایشی','درگاه پرداخت آزمایشی (بدون پول واقعی؛ فقط برای تست)')};
+ return rs&&!rs.ok?box:box+x.replace('درگاه پرداخت آزمایشی','درگاه پرداخت آزمایشی (بدون پول واقعی؛ فقط برای تست)')};
 ACT['cloud-order']=t=>{if(t.disabled)return;const o=ORDERS.get(t.dataset.id);if(!o)return;t.disabled=true;t.innerHTML=ic('refresh',18)+' در حال ارسال...';createOrderViaSupabase(o).then(r=>{o.remote=r.ok?{ok:true,ref:r.res.orderId||r.res.order_id||r.res.id||'',status:r.res.status||'',pay:r.pay}:{ok:false,error:r.error};persist();renderMain();toast(r.ok?'سفارش در سرور ثبت شد':'ثبت سفارش ناموفق بود: '+r.error,r.ok?'ok':'er')})};
 function cloudBoot(){if(!CLOUD.on())return;S.ui.cloudLoading=true;document.documentElement.classList.add('cloud-loading');Promise.allSettled([loadSiteStateFromSupabase(),loadProductsFromSupabase(),loadAnnouncementsFromSupabase()]).then(rs=>{S.ui.cloudLoading=false;document.documentElement.classList.remove('cloud-loading');const p=rs[1].value||{};if(p.ok){applySettingsCfg();applyTheme();render()}else if(!p.skipped)toast('دریافت محصولات از دیتابیس ناموفق بود؛ آخرین نسخه ذخیره‌شده نمایش داده می‌شود. ('+(p.error||'')+')','er',{label:'تلاش دوباره',fn:()=>cloudBoot()})})}
 addEventListener('online',()=>{if(CLOUD.on()&&CLOUD.st.state==='error')cloudBoot()});
@@ -3535,6 +3548,211 @@ const FX9_OPTS=[['auto','خودکار','هماهنگ با تم'],['stars','شب 
 {const _sh=studioHtml;studioHtml=function(){const s=_sh.apply(this,arguments);const cur=FX9.pref();const blk=`<h4>${ic('spark',15)} انیمیشن زنده</h4><div class="fx9o" role="radiogroup" aria-label="سبک انیمیشن">${FX9_OPTS.map(x=>`<button type="button" role="radio" aria-checked="${cur===x[0]}" class="fx9b ${cur===x[0]?'on':''}" data-act="st-fx" data-v="${x[0]}"><span class="fx9pv fx9pv-${x[0]}" aria-hidden="true"><i></i><i></i><i></i></span><b>${x[1]}</b><small>${x[2]}</small></button>`).join('')}</div>`;const i=s.indexOf('<details class="stadv"');return i<0?s+blk:s.slice(0,i)+blk+s.slice(i)}}
 ACT['st-fx']=t=>{studioSet({fx:t.dataset.v});stRefresh();FX9.recolor()};
 boot().catch(err=>{console.error(err);document.getElementById('app').innerHTML='<div style="padding:30px;text-align:center;font-family:Tahoma">خطا در اجرای فروشگاه: '+String(err.message).replace(/</g,'&lt;')+'<br><br><button onclick="try{localStorage.clear()}catch(e){};location.reload()">پاک کردن داده‌ها و شروع دوباره</button></div>'});
+
+
+/* KALACHIN_CLOUD_ORDERS_PATCH_V1 */
+const KALACHIN_REMOTE_ORDERS = new Map();
+let KALACHIN_ORDERS_LOADING = null;
+let KALACHIN_ORDERS_LOADED_AT = 0;
+
+function kalachinParseJSON(v, fallback) {
+  if (typeof v !== 'string') return v == null ? fallback : v;
+  try { return JSON.parse(v); } catch (_) { return fallback; }
+}
+
+function kalachinNormalizeOrder(row) {
+  const id = String(row.id || '');
+  if (!id) return null;
+
+  const validStatus = Object.prototype.hasOwnProperty.call(
+    CONFIG.statuses, String(row.status || '')
+  );
+  const status = validStatus ? String(row.status) : 'pending';
+  const at = Date.parse(row.created_at || '') || Date.now();
+  const history = kalachinParseJSON(row.history, []);
+  const items = kalachinParseJSON(row.items, []);
+  const address = kalachinParseJSON(row.address, {});
+  const payment = kalachinParseJSON(row.payment, null);
+
+  return {
+    id,
+    uid: String(row.customer_id || ''),
+    customer: String(row.customer_name || 'مشتری'),
+    mobile: String(row.mobile || ''),
+    items: (Array.isArray(items) ? items : []).map(i => ({
+      id: String(i.id || ''),
+      name: String(i.name || i.title || 'کالا'),
+      price: Number(i.price) || 0,
+      img: String(i.img || i.image || i.image_url || ''),
+      qty: Math.max(1, Number(i.qty) || 1)
+    })),
+    sub: Number(row.subtotal) || 0,
+    disc: Number(row.discount) || 0,
+    ship: Number(row.shipping) || 0,
+    total: Number(row.total) || 0,
+    pointsUsed: Number(row.points_used) || 0,
+    ptsDisc: Number(row.points_discount) || 0,
+    updated: Date.parse(row.updated_at || '') || at,
+    coupon: row.coupon || '',
+    method: row.method === 'installment' ? 'installment' : 'online',
+    plan: Number(row.plan) || 0,
+    delivery: row.delivery === 'express' ? 'express' : 'normal',
+    address: address && typeof address === 'object' ? address : {},
+    status,
+    at,
+    history: (Array.isArray(history) ? history : []).map(x => ({
+      s: x.status || x.s || 'pending',
+      at: Date.parse(x.at || '') || at,
+      note: x.note || ''
+    })),
+    pay: payment && typeof payment === 'object' ? payment : null,
+    remoteCloud: true
+  };
+}
+
+async function kalachinLoadOrders(force = false) {
+  if (!CLOUD.on() || !CLOUD.ses()) return Promise.resolve(false);
+  if (KALACHIN_ORDERS_LOADING) return KALACHIN_ORDERS_LOADING;
+  if (!force && Date.now() - KALACHIN_ORDERS_LOADED_AT < 15000) return Promise.resolve(true);
+
+  KALACHIN_ORDERS_LOADING = (async () => {
+    try {
+      const rows = await CLOUD.raw(
+        CLOUD.q('Orders') + '?select=*&order=created_at.desc',
+        { method: 'GET', auth: true, ms: 30000 }
+      );
+
+      if (!Array.isArray(rows)) throw new Error('پاسخ فهرست سفارش‌ها معتبر نیست.');
+
+      const fresh = new Map();
+      for (const row of rows) {
+        const o = kalachinNormalizeOrder(row);
+        if (o) fresh.set(o.id, { row, order: o });
+      }
+
+      KALACHIN_REMOTE_ORDERS.clear();
+      for (const [id, value] of fresh) KALACHIN_REMOTE_ORDERS.set(id, value);
+      KALACHIN_ORDERS_LOADED_AT = Date.now();
+
+      console.info('Kalachin: سفارش‌های سرور دریافت شدند:', fresh.size);
+      return true;
+    } catch (e) {
+      console.error('Kalachin cloud orders:', e);
+      toast('دریافت سفارش‌های سرور ناموفق بود: ' + e.message, 'er');
+      return false;
+    } finally {
+      KALACHIN_ORDERS_LOADING = null;
+    }
+  })();
+
+  return KALACHIN_ORDERS_LOADING;
+}
+
+const KALACHIN_ORIGINAL_ADM_ORDERS = admOrders;
+admOrders = function(sub) {
+  if (sub && KALACHIN_REMOTE_ORDERS.has(String(sub))) {
+    const o = KALACHIN_REMOTE_ORDERS.get(String(sub)).order;
+    return `<a class="btn ghost sm" href="#/admin/orders" style="margin-bottom:10px">
+      ${ic('chevr',16)} همه سفارش‌ها</a>
+      <div class="card" style="margin-bottom:14px">
+      <div class="row"><b>تغییر وضعیت سفارش سرور:</b>${stSel(o)}</div>
+      <p class="xs muted">تغییر وضعیت فقط پس از تأیید دیتابیس ثبت‌شده محسوب می‌شود.</p>
+      </div>${orderDetail(o,true)}`;
+  }
+
+  if (sub) return KALACHIN_ORIGINAL_ADM_ORDERS(sub);
+
+  const original = S.db.orders;
+  const remote = [...KALACHIN_REMOTE_ORDERS.values()].map(x => x.order);
+  const ids = new Set(remote.map(o => o.id));
+  S.db.orders = [...original.filter(o => !ids.has(String(o.id))), ...remote];
+
+  try {
+    return KALACHIN_ORIGINAL_ADM_ORDERS();
+  } finally {
+    S.db.orders = original;
+  }
+};
+
+document.addEventListener('change', async function(e) {
+  const t = e.target;
+  if (!t || !t.dataset || !t.dataset.ost) return;
+
+  const id = String(t.dataset.ost);
+  if (!KALACHIN_REMOTE_ORDERS.has(id)) return;
+
+  e.preventDefault();
+  e.stopImmediatePropagation();
+
+  const entry = KALACHIN_REMOTE_ORDERS.get(id);
+  const oldStatus = entry.order.status;
+  const newStatus = String(t.value || '');
+
+  if (!Object.prototype.hasOwnProperty.call(CONFIG.statuses, newStatus)) {
+    toast('وضعیت انتخاب‌شده معتبر نیست.', 'er');
+    renderMain();
+    return;
+  }
+  if (newStatus === oldStatus) return;
+
+  t.disabled = true;
+  try {
+    const oldHistory = kalachinParseJSON(entry.row.history, []);
+    const history = Array.isArray(oldHistory) ? oldHistory.slice() : [];
+    const now = new Date().toISOString();
+    history.push({
+      status: newStatus,
+      at: now,
+      note: 'وضعیت توسط مدیر فروشگاه تغییر کرد.'
+    });
+
+    const result = await CLOUD.raw(
+      CLOUD.q('Orders') + '?id=eq.' + encodeURIComponent(id),
+      {
+        method: 'PATCH',
+        body: {
+          status: newStatus,
+          history,
+          updated_at: now
+        },
+        headers: { Prefer: 'return=representation' },
+        auth: true,
+        ms: 30000
+      }
+    );
+
+    if (!Array.isArray(result) || !result.length) {
+      throw new Error('سرور هیچ سفارشی را تغییر نداد؛ مجوز UPDATE را بررسی کنید.');
+    }
+
+    const row = result[0];
+    const order = kalachinNormalizeOrder(row);
+    if (!order) throw new Error('سفارش به‌روزشده قابل خواندن نیست.');
+
+    KALACHIN_REMOTE_ORDERS.set(id, { row, order });
+    toast('وضعیت سفارش ' + id + ' در دیتابیس ذخیره شد.', 'ok');
+    renderMain();
+  } catch (err) {
+    console.error('Kalachin order update:', err);
+    toast('ذخیره وضعیت ناموفق بود: ' + err.message, 'er');
+    renderMain();
+  }
+}, true);
+
+const KALACHIN_ORIGINAL_RENDER_MAIN = renderMain;
+renderMain = function() {
+  const route = parseRoute();
+  if (route.name === 'admin' && CLOUD.on() && CLOUD.ses()) {
+    kalachinLoadOrders().then(ok => {
+      if (ok && parseRoute().name === 'admin') {
+        KALACHIN_ORIGINAL_RENDER_MAIN();
+      }
+    });
+  }
+  return KALACHIN_ORIGINAL_RENDER_MAIN();
+};
+/* END KALACHIN_CLOUD_ORDERS_PATCH_V1 */
+
 </script>
 </body>
 </html>
