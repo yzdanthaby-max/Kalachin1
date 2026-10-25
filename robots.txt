@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://yzdanthaby-max.github.io/Kalachin1/sitemap.xml
